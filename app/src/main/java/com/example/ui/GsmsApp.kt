@@ -97,6 +97,7 @@ private fun GsmsAuthenticatedShell(
     val workspaceState by viewModel.uiState.collectAsStateWithLifecycle()
     val aiState by viewModel.aiState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val focusStudentId by viewModel.focusStudentId.collectAsStateWithLifecycle()
     val bannerMessage by viewModel.statusBanner.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableStateOf(GsmsTab.DASHBOARD) }
@@ -322,6 +323,8 @@ private fun GsmsAuthenticatedShell(
                                         workspace = workspace,
                                         searchQuery = searchQuery,
                                         isWideScreen = isWideScreen,
+                                        focusStudentId = focusStudentId,
+                                        onSelectFocusStudent = { student -> viewModel.selectFocusStudent(student) },
                                         onRunAiCapability = { prompt -> viewModel.askAiCopilot(workspace, prompt) },
                                         onOpenAiTab = { selectedTab = GsmsTab.AI_GOVERNANCE },
                                         onNavigateToTab = { targetTab ->

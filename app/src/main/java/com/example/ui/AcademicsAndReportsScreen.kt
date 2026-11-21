@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.PdfExportHelper
 import com.example.model.*
 import com.example.ui.theme.*
@@ -27,8 +28,13 @@ fun AcademicsAndReportsScreen(
     val school = workspace.activeSchool ?: return
     val role = workspace.activeRole
     val context = LocalContext.current
-    val isStudentOrParent = role == PortalRole.STUDENT || role == PortalRole.PARENT
-    val focusStudent = if (isStudentOrParent) workspace.students.firstOrNull() else null
+    val isStudentOrParent = RolePolicy.requiresLearnerScope(role)
+    val focusStudentId by viewModel.focusStudentId.collectAsStateWithLifecycle()
+    val focusStudent = if (isStudentOrParent) {
+        RolePolicy.resolveFocusStudent(workspace.students, focusStudentId)
+    } else {
+        null
+    }
 
     val tabs = remember(role, school.enabledModules) {
         RolePolicy.academicSubTabs(role, school)
@@ -50,7 +56,36 @@ fun AcademicsAndReportsScreen(
         return
     }
 
+    if (isStudentOrParent && focusStudent == null) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            LearnerScopePicker(
+                students = workspace.students,
+                focusStudentId = focusStudentId,
+                onSelect = viewModel::selectFocusStudent
+            )
+            EmptyStateCard(
+                Icons.Rounded.Person,
+                "Select a learner",
+                "${role.shortTitle} records are scoped to a single learner. Choose one to see their academics, attendance and report cards."
+            )
+        }
+        return
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
+        if (isStudentOrParent) {
+            LearnerScopePicker(
+                students = workspace.students,
+                focusStudentId = focusStudentId,
+                onSelect = viewModel::selectFocusStudent,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp)
+            )
+        }
         ScrollableTabRow(selectedTabIndex = selectedTab.coerceIn(0, tabs.lastIndex)) {
             tabs.forEachIndexed { idx, title ->
                 Tab(

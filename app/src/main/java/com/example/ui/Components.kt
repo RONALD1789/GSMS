@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.model.PortalRole
 import com.example.model.RiskLevel
+import com.example.model.Student
 import com.example.ui.theme.*
 
 @Composable
@@ -460,6 +461,43 @@ fun EmptyStateCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/**
+ * Explicit learner selector for roles whose access is scoped to one learner
+ * (student and parent portals). Keeps role-scoped screens from ever rendering
+ * an arbitrary learner's records.
+ */
+@Composable
+fun LearnerScopePicker(
+    students: List<Student>,
+    focusStudentId: String?,
+    modifier: Modifier = Modifier,
+    onSelect: (Student) -> Unit
+) {
+    if (students.isEmpty()) return
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "Viewing learner",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(students, key = { it.id }) { learner ->
+                FilterChip(
+                    selected = learner.id == focusStudentId,
+                    onClick = { onSelect(learner) },
+                    label = {
+                        Text(
+                            text = "${learner.fullName} • ${learner.className}",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                )
+            }
         }
     }
 }

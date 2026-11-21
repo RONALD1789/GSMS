@@ -21,6 +21,8 @@ fun PortalDashboardScreen(
     workspace: GsmsWorkspaceState,
     searchQuery: String,
     isWideScreen: Boolean,
+    focusStudentId: String?,
+    onSelectFocusStudent: (Student) -> Unit,
     onRunAiCapability: (String) -> Unit,
     onOpenAiTab: () -> Unit,
     onNavigateToTab: (GsmsTab) -> Unit,
@@ -262,30 +264,49 @@ fun PortalDashboardScreen(
             }
 
             PortalRole.STUDENT -> {
-                val student = workspace.students.firstOrNull()
+                val student = RolePolicy.resolveFocusStudent(workspace.students, focusStudentId)
                 val publishedReports = workspace.reportCards.filter {
-                    it.status == ReportStatus.PUBLISHED.name && (student == null || it.studentId == student.id)
+                    it.status == ReportStatus.PUBLISHED.name && it.studentId == student?.id
                 }
                 item {
-                    KpiGrid(
-                        isWideScreen = isWideScreen,
-                        cards = listOf(
-                            KpiData("Performance Avg", "${student?.averageScore ?: 92.0}%", "Top Tier", Icons.Rounded.Stars, EmeraldTeal),
-                            KpiData("Attendance", "${student?.attendanceRate ?: 97.5}%", "On Track", Icons.Rounded.CheckCircle, CobaltBlue),
-                            KpiData("Exams Upcoming", "${workspace.academics.count { it.recordType == "EXAM" }}", "This Term", Icons.Rounded.EventNote, WarmAmber),
-                            KpiData("Report Cards", "${publishedReports.size}", "Published", Icons.Rounded.PictureAsPdf, VioletAi)
+                    LearnerScopePicker(
+                        students = workspace.students,
+                        focusStudentId = focusStudentId,
+                        onSelect = onSelectFocusStudent
+                    )
+                }
+                if (student == null) {
+                    item {
+                        EmptyStateCard(
+                            Icons.Rounded.Person,
+                            "Select a learner",
+                            "Student portal records are scoped to one learner. Choose a learner to see their performance, attendance and reports."
                         )
-                    )
+                    }
+                } else {
+                    item {
+                        KpiGrid(
+                            isWideScreen = isWideScreen,
+                            cards = listOf(
+                                KpiData("Performance Avg", "${student.averageScore}%", "Top Tier", Icons.Rounded.Stars, EmeraldTeal),
+                                KpiData("Attendance", "${student.attendanceRate}%", "On Track", Icons.Rounded.CheckCircle, CobaltBlue),
+                                KpiData("Exams Upcoming", "${workspace.academics.count { it.recordType == "EXAM" }}", "This Term", Icons.Rounded.EventNote, WarmAmber),
+                                KpiData("Report Cards", "${publishedReports.size}", "Published", Icons.Rounded.PictureAsPdf, VioletAi)
+                            )
+                        )
+                    }
                 }
-                item {
-                    TrendSparklineCard(
-                        title = "Personal Mastery Trajectory",
-                        headlineValue = "${student?.averageScore ?: 92.4}%",
-                        points = listOf(81f, 84f, 87f, 89f, (student?.averageScore ?: 92.4).toFloat()),
-                        lineColor = EmeraldTeal
-                    )
+                if (student != null) {
+                    item {
+                        TrendSparklineCard(
+                            title = "Personal Mastery Trajectory",
+                            headlineValue = "${student.averageScore}%",
+                            points = listOf(81f, 84f, 87f, 89f, student.averageScore.toFloat()),
+                            lineColor = EmeraldTeal
+                        )
+                    }
                 }
-                if (school?.hasModule(GsmsModule.REPORT_CARDS) != false) {
+                if (student != null && school?.hasModule(GsmsModule.REPORT_CARDS) != false) {
                     item {
                         PublishedReportDownloadSection(
                             school = school,
@@ -297,23 +318,40 @@ fun PortalDashboardScreen(
             }
 
             PortalRole.PARENT -> {
-                val child = workspace.students.firstOrNull()
+                val child = RolePolicy.resolveFocusStudent(workspace.students, focusStudentId)
                 val publishedReports = workspace.reportCards.filter {
-                    it.status == ReportStatus.PUBLISHED.name && (child == null || it.studentId == child.id)
+                    it.status == ReportStatus.PUBLISHED.name && it.studentId == child?.id
                 }
                 val parentMessages = RolePolicy.filterCommunicationsForRole(role, workspace.communications)
                 item {
-                    KpiGrid(
-                        isWideScreen = isWideScreen,
-                        cards = listOf(
-                            KpiData("Child Average", "${child?.averageScore ?: 92.4}%", child?.className ?: "Grade 10A", Icons.Rounded.School, CobaltBlue),
-                            KpiData("Attendance", "${child?.attendanceRate ?: 97.5}%", "Term 1", Icons.Rounded.Verified, EmeraldTeal),
-                            KpiData("Fee Balance", "$${(child?.feeBalanceUsd ?: 0.0).toInt()}", "Account", Icons.Rounded.Payments, if ((child?.feeBalanceUsd ?: 0.0) > 0) WarmAmber else EmeraldTeal),
-                            KpiData("Messages", "${parentMessages.size}", "School Updates", Icons.Rounded.MarkEmailUnread, VioletAi)
-                        )
+                    LearnerScopePicker(
+                        students = workspace.students,
+                        focusStudentId = focusStudentId,
+                        onSelect = onSelectFocusStudent
                     )
                 }
-                if (school?.hasModule(GsmsModule.REPORT_CARDS) != false) {
+                if (child == null) {
+                    item {
+                        EmptyStateCard(
+                            Icons.Rounded.Person,
+                            "Select your child",
+                            "Parent portal records are scoped to one learner. Choose a learner to see their fees, attendance and reports."
+                        )
+                    }
+                } else {
+                    item {
+                        KpiGrid(
+                            isWideScreen = isWideScreen,
+                            cards = listOf(
+                                KpiData("Child Average", "${child.averageScore}%", child.className, Icons.Rounded.School, CobaltBlue),
+                                KpiData("Attendance", "${child.attendanceRate}%", "Term 1", Icons.Rounded.Verified, EmeraldTeal),
+                                KpiData("Fee Balance", "$${child.feeBalanceUsd.toInt()}", "Account", Icons.Rounded.Payments, if (child.feeBalanceUsd > 0) WarmAmber else EmeraldTeal),
+                                KpiData("Messages", "${parentMessages.size}", "School Updates", Icons.Rounded.MarkEmailUnread, VioletAi)
+                            )
+                        )
+                    }
+                }
+                if (child != null && school?.hasModule(GsmsModule.REPORT_CARDS) != false) {
                     item {
                         PublishedReportDownloadSection(
                             school = school,

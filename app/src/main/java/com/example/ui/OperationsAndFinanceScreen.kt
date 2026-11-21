@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.model.*
 import com.example.ui.theme.*
 
@@ -23,7 +24,13 @@ fun OperationsAndFinanceScreen(
 ) {
     val school = workspace.activeSchool ?: return
     val role = workspace.activeRole
-    val focusStudent = if (role == PortalRole.PARENT || role == PortalRole.STUDENT) workspace.students.firstOrNull() else null
+    val focusStudentId by viewModel.focusStudentId.collectAsStateWithLifecycle()
+    val scopedToLearner = RolePolicy.requiresLearnerScope(role)
+    val focusStudent = if (scopedToLearner) {
+        RolePolicy.resolveFocusStudent(workspace.students, focusStudentId)
+    } else {
+        null
+    }
     val enabledSections = remember(role, school.enabledModules) {
         RolePolicy.operationSections(role, school)
     }
@@ -42,7 +49,36 @@ fun OperationsAndFinanceScreen(
         return
     }
 
+    if (scopedToLearner && focusStudent == null) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            LearnerScopePicker(
+                students = workspace.students,
+                focusStudentId = focusStudentId,
+                onSelect = viewModel::selectFocusStudent
+            )
+            EmptyStateCard(
+                Icons.Rounded.Person,
+                "Select a learner",
+                "${role.shortTitle} finance records are scoped to a single learner. Choose one to see their fee invoices."
+            )
+        }
+        return
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
+        if (scopedToLearner) {
+            LearnerScopePicker(
+                students = workspace.students,
+                focusStudentId = focusStudentId,
+                onSelect = viewModel::selectFocusStudent,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp)
+            )
+        }
         if (enabledSections.size > 1) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
