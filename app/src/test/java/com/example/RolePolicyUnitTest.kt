@@ -88,4 +88,80 @@ class RolePolicyUnitTest {
         assertFalse(GsmsTab.OPERATIONS in librarianTabs)
         assertTrue(GsmsTab.ANALYTICS in librarianTabs)
     }
+
+    @Test
+    fun learnerScopedRoles_requireAnExplicitLearnerSelection() {
+        assertTrue(RolePolicy.requiresLearnerScope(PortalRole.STUDENT))
+        assertTrue(RolePolicy.requiresLearnerScope(PortalRole.PARENT))
+
+        assertFalse(RolePolicy.requiresLearnerScope(PortalRole.TEACHER))
+        assertFalse(RolePolicy.requiresLearnerScope(PortalRole.SCHOOL_ADMIN))
+        assertFalse(RolePolicy.requiresLearnerScope(PortalRole.WELFARE_NURSE))
+
+        val students = listOf(
+            Student(id = "stu_1", fullName = "Amina Patel", className = "Grade 10A"),
+            Student(id = "stu_2", fullName = "Brian Otieno", className = "Grade 10B")
+        )
+        assertNull(RolePolicy.resolveFocusStudent(students, null))
+        assertNull(RolePolicy.resolveFocusStudent(students, "   "))
+        assertNull(RolePolicy.resolveFocusStudent(students, "stu_unknown"))
+        assertEquals("Amina Patel", RolePolicy.resolveFocusStudent(students, "stu_1")?.fullName)
+    }
+
+    @Test
+    fun parentFinance_isEmptyWithoutALearner_andScopedWithOne() {
+        val entries = listOf(
+            FinanceEntry(id = "1", entryType = "INVOICE", partyName = "Amina Patel"),
+            FinanceEntry(id = "2", entryType = "INVOICE", partyName = "Brian Otieno"),
+            FinanceEntry(id = "3", entryType = "PAYROLL", partyName = "Brian Otieno")
+        )
+        assertTrue(RolePolicy.filterFinanceForRole(PortalRole.PARENT, entries, null).isEmpty())
+
+        val scoped = RolePolicy.filterFinanceForRole(
+            PortalRole.PARENT,
+            entries,
+            Student(id = "stu_2", fullName = "Brian Otieno")
+        )
+        assertEquals(1, scoped.size)
+        assertEquals("Brian Otieno", scoped.first().partyName)
+
+        assertTrue(
+            RolePolicy.filterFinanceForRole(
+                PortalRole.STUDENT,
+                entries,
+                Student(id = "stu_1", fullName = "Amina Patel")
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun studentAndParentNotices_neverFallBackToUnrelatedAnnouncements() {
+        val items = listOf(
+            CommunicationItem(id = "c1", audience = "Staff Only", title = "Payroll cut-off"),
+            CommunicationItem(id = "c2", audience = "All Parents", title = "Sports day")
+        )
+        assertTrue(RolePolicy.filterCommunicationsForRole(PortalRole.STUDENT, items).none { it.id == "c1" })
+        assertTrue(RolePolicy.filterCommunicationsForRole(PortalRole.PARENT, items).none { it.id == "c1" })
+
+        val parentVisible = RolePolicy.filterCommunicationsForRole(PortalRole.PARENT, items)
+        assertEquals(1, parentVisible.size)
+        assertEquals("c2", parentVisible.first().id)
+
+        assertEquals(2, RolePolicy.filterCommunicationsForRole(PortalRole.TEACHER, items).size)
+    }
+
+    @Test
+    fun feeAndLeaveBalances_followCapabilities_notHardcodedRoles() {
+        assertTrue(RolePolicy.canViewLearnerFeeBalances(PortalRole.SCHOOL_ADMIN))
+        assertTrue(RolePolicy.canViewLearnerFeeBalances(PortalRole.FINANCE_OFFICER))
+        assertTrue(RolePolicy.canViewLearnerFeeBalances(PortalRole.PARENT))
+        assertFalse(RolePolicy.canViewLearnerFeeBalances(PortalRole.ADMISSIONS_RECEPTION))
+        assertFalse(RolePolicy.canViewLearnerFeeBalances(PortalRole.TEACHER))
+        assertFalse(RolePolicy.canViewLearnerFeeBalances(PortalRole.WELFARE_NURSE))
+
+        assertTrue(RolePolicy.canViewStaffLeaveBalances(PortalRole.HR_MANAGER))
+        assertTrue(RolePolicy.canViewStaffLeaveBalances(PortalRole.HEADTEACHER))
+        assertFalse(RolePolicy.canViewStaffLeaveBalances(PortalRole.TEACHER))
+        assertFalse(RolePolicy.canViewStaffLeaveBalances(PortalRole.LIBRARIAN))
+    }
 }

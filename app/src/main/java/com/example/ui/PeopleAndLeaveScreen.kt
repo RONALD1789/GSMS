@@ -51,7 +51,7 @@ fun PeopleAndLeaveScreen(
         when (tabs.getOrNull(selectedTab)) {
             "Students" -> {
                 val canEnroll = role.has(RoleCapability.ENROLL_STUDENT) && school.hasModule(GsmsModule.ADMISSIONS)
-                val showFeeBalances = role == PortalRole.SUPER_ADMIN || role == PortalRole.SCHOOL_ADMIN || role == PortalRole.ADMISSIONS_RECEPTION
+                val showFeeBalances = RolePolicy.canViewLearnerFeeBalances(role)
                 val filtered = workspace.students.filter {
                     searchQuery.isBlank() || it.fullName.contains(searchQuery, true) || it.className.contains(searchQuery, true)
                 }
@@ -105,7 +105,7 @@ fun PeopleAndLeaveScreen(
             }
 
             "Staff & Faculty" -> {
-                val showLeaveBalances = role != PortalRole.TEACHER
+                val showLeaveBalances = RolePolicy.canViewStaffLeaveBalances(role)
                 val filteredStaff = workspace.staff.filter {
                     searchQuery.isBlank() || it.fullName.contains(searchQuery, true) || it.department.contains(searchQuery, true)
                 }

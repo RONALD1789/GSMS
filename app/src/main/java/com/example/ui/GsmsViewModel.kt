@@ -65,6 +65,10 @@ class GsmsViewModel(
     private val _statusBanner = MutableStateFlow<String?>(null)
     val statusBanner: StateFlow<String?> = _statusBanner.asStateFlow()
 
+    /** Learner explicitly selected by a learner-scoped role (student / parent). */
+    private val _focusStudentId = MutableStateFlow<String?>(null)
+    val focusStudentId: StateFlow<String?> = _focusStudentId.asStateFlow()
+
     private val _bootError = MutableStateFlow<String?>(null)
 
     @Volatile
@@ -205,6 +209,15 @@ class GsmsViewModel(
 
     fun showBanner(message: String) {
         _statusBanner.value = message
+    }
+
+    fun selectFocusStudent(student: Student) {
+        if (!RolePolicy.requiresLearnerScope(currentActiveRole)) {
+            _statusBanner.value = "Access denied: ${currentActiveRole.shortTitle} is not scoped to a single learner."
+            return
+        }
+        _focusStudentId.value = student.id
+        _statusBanner.value = "Viewing ${student.fullName}"
     }
 
     fun switchRole(role: PortalRole) {
@@ -573,7 +586,7 @@ class GsmsViewModel(
                 sb.appendLine("Report Cards: ${w.reportCards.groupBy { it.status }.mapValues { it.value.size }}")
             }
             PortalRole.STUDENT -> {
-                val focusStudent = w.students.firstOrNull()
+                val focusStudent = RolePolicy.resolveFocusStudent(w.students, _focusStudentId.value)
                 if (focusStudent != null) {
                     sb.appendLine("Student Focus: ${focusStudent.fullName} (${focusStudent.className}), Avg ${focusStudent.averageScore}%, Attendance ${focusStudent.attendanceRate}%")
                 }
@@ -582,7 +595,7 @@ class GsmsViewModel(
                 }
             }
             PortalRole.PARENT -> {
-                val focusStudent = w.students.firstOrNull()
+                val focusStudent = RolePolicy.resolveFocusStudent(w.students, _focusStudentId.value)
                 if (focusStudent != null) {
                     sb.appendLine("Child Focus: ${focusStudent.fullName} (${focusStudent.className}), Avg ${focusStudent.averageScore}%, Attendance ${focusStudent.attendanceRate}%, Fee Balance USD ${focusStudent.feeBalanceUsd.toInt()}")
                 }

@@ -213,6 +213,32 @@ object RolePolicy {
     fun has(role: PortalRole, capability: RoleCapability): Boolean =
         capabilitiesByRole[role]?.contains(capability) == true
 
+    /**
+     * True when the role is only ever allowed to see a single learner's records
+     * (a student's own record, or a parent's child). Such roles must never be
+     * silently shown another learner's data.
+     */
+    fun requiresLearnerScope(role: PortalRole): Boolean =
+        has(role, RoleCapability.VIEW_OWN_PUBLISHED_REPORTS) && !has(role, RoleCapability.VIEW_ALL_STUDENTS)
+
+    /**
+     * Resolves the learner a scoped role has explicitly selected.
+     * Returns null when nothing is selected, so callers show a "select a learner"
+     * state instead of falling back to an arbitrary learner record.
+     */
+    fun resolveFocusStudent(students: List<Student>, focusStudentId: String?): Student? {
+        val id = focusStudentId?.takeIf { it.isNotBlank() } ?: return null
+        return students.firstOrNull { it.id == id }
+    }
+
+    /** Fee balances are finance data: only finance-capable roles may read them. */
+    fun canViewLearnerFeeBalances(role: PortalRole): Boolean =
+        has(role, RoleCapability.VIEW_FINANCE_ALL) || has(role, RoleCapability.VIEW_OWN_INVOICES_ONLY)
+
+    /** Staff leave balances are HR data: only leave approvers may read them. */
+    fun canViewStaffLeaveBalances(role: PortalRole): Boolean =
+        has(role, RoleCapability.APPROVE_LEAVE)
+
     fun academicSubTabs(role: PortalRole, school: School?): List<String> {
         if (school == null) return emptyList()
         return buildList {
@@ -335,9 +361,10 @@ object RolePolicy {
             PortalRole.FINANCE_OFFICER -> entries
             PortalRole.HR_MANAGER -> entries.filter { it.entryType == "PAYROLL" }
             PortalRole.PARENT -> {
-                val studentName = focusStudent?.fullName
+                // No learner selected means no invoices: never fall back to the whole ledger.
+                val studentName = focusStudent?.fullName ?: return emptyList()
                 entries.filter {
-                    it.entryType == "INVOICE" && (studentName == null || it.partyName.equals(studentName, ignoreCase = true))
+                    it.entryType == "INVOICE" && it.partyName.equals(studentName, ignoreCase = true)
                 }
             }
             else -> emptyList()
@@ -350,12 +377,12 @@ object RolePolicy {
                 it.audience.contains("All", ignoreCase = true) ||
                     it.audience.contains("Student", ignoreCase = true) ||
                     it.audience.contains("Grade", ignoreCase = true)
-            }.ifEmpty { items }
+            }
             PortalRole.PARENT -> items.filter {
                 it.audience.contains("All", ignoreCase = true) ||
                     it.audience.contains("Parent", ignoreCase = true) ||
                     it.audience.contains("Guardian", ignoreCase = true)
-            }.ifEmpty { items }
+            }
             else -> items
         }
     }
@@ -369,6 +396,7 @@ object RolePolicy {
                 PortalRole.TRANSPORT_MANAGER -> "Transport"
                 PortalRole.WELFARE_NURSE -> "Welfare"
                 PortalRole.ADMISSIONS_RECEPTION -> "Admissions"
+                PortalRole.HR_MANAGER -> "Payroll"
                 else -> tab.label
             }
             GsmsTab.ANALYTICS -> when (role) {
