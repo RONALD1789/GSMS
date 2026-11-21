@@ -13,10 +13,21 @@ class RolePolicyUnitTest {
     )
 
     @Test
+    fun allNineteenPortals_haveUniqueDashboardsAndBaseCapabilities() {
+        assertEquals(19, PortalRole.entries.size)
+        PortalRole.entries.forEach { role ->
+            assertTrue("Missing capabilities for $role", RolePolicy.baseCapabilities(role).isNotEmpty())
+            assertTrue("Missing visible tabs for $role", RolePolicy.visibleTabs(role, fullSchool).isNotEmpty())
+            assertTrue("Missing access summary for $role", RolePolicy.accessSummary(role).isNotBlank())
+        }
+    }
+
+    @Test
     fun superAdmin_hasGlobalTenantAndAuditAccess_withoutOperationalEdits() {
         val role = PortalRole.SUPER_ADMIN
         assertTrue(role.has(RoleCapability.CREATE_SCHOOL_TENANT))
         assertTrue(role.has(RoleCapability.MANAGE_MODULES))
+        assertTrue(role.has(RoleCapability.MANAGE_USER_PERMISSIONS))
         assertTrue(role.has(RoleCapability.VIEW_AUDIT_LOGS))
         assertFalse(role.has(RoleCapability.APPROVE_PUBLISH_REPORT_CARDS))
         assertFalse(role.has(RoleCapability.APPROVE_LEAVE))
@@ -24,7 +35,7 @@ class RolePolicyUnitTest {
     }
 
     @Test
-    fun teacher_canFillReportsAndMarkAttendance_butCannotApproveReportsOrLeaveOrModules() {
+    fun teacher_and_classTeacher_areScopedToAssignedClassesAndSubjects() {
         val role = PortalRole.TEACHER
         assertTrue(role.has(RoleCapability.MARK_ATTENDANCE))
         assertTrue(role.has(RoleCapability.FILL_SUBMIT_REPORT_CARDS))
@@ -36,10 +47,35 @@ class RolePolicyUnitTest {
         assertFalse(role.has(RoleCapability.MANAGE_MODULES))
         assertFalse(role.has(RoleCapability.VIEW_AUDIT_LOGS))
         assertFalse(GsmsTab.OPERATIONS in RolePolicy.visibleTabs(role, fullSchool))
+
+        assertTrue(GsmsTab.OPERATIONS in RolePolicy.visibleTabs(PortalRole.CLASS_TEACHER, fullSchool))
+        assertEquals(listOf("Welfare", "Discipline"), RolePolicy.operationSections(PortalRole.CLASS_TEACHER, fullSchool))
+
+        val students = listOf(
+            Student(id = "stu_1", fullName = "Maya Lin", className = "Grade 10A"),
+            Student(id = "stu_3", fullName = "Amina Yusuf", className = "Grade 11B")
+        )
+        val scopedStudents = RolePolicy.filterStudentsForRole(PortalRole.TEACHER, students, listOf("Grade 10A"))
+        assertEquals(1, scopedStudents.size)
+        assertEquals("stu_1", scopedStudents.first().id)
+
+        val academics = listOf(
+            AcademicRecord(id = "a1", title = "Calculus", className = "Grade 10A", subjectName = "Mathematics"),
+            AcademicRecord(id = "a2", title = "Literature", className = "Grade 10A", subjectName = "English"),
+            AcademicRecord(id = "a3", title = "Biology", className = "Grade 11B", subjectName = "Biology")
+        )
+        val teacherAcademics = RolePolicy.filterAcademicsForRole(
+            PortalRole.TEACHER,
+            academics,
+            assignedClasses = listOf("Grade 10A"),
+            assignedSubjects = listOf("Mathematics")
+        )
+        assertEquals(1, teacherAcademics.size)
+        assertEquals("a1", teacherAcademics.first().id)
     }
 
     @Test
-    fun student_and_parent_areStrictlyReadOnly_andScoped() {
+    fun student_and_parent_areStrictlyReadOnly_andScopedToLinkedChildren() {
         val studentTabs = RolePolicy.visibleTabs(PortalRole.STUDENT, fullSchool)
         assertEquals(
             listOf(GsmsTab.DASHBOARD, GsmsTab.ACADEMICS, GsmsTab.ANALYTICS, GsmsTab.AI_GOVERNANCE),
@@ -51,32 +87,72 @@ class RolePolicyUnitTest {
         assertTrue(PortalRole.STUDENT.has(RoleCapability.VIEW_OWN_PUBLISHED_REPORTS))
 
         val parentTabs = RolePolicy.visibleTabs(PortalRole.PARENT, fullSchool)
-        assertTrue(GsmsTab.OPERATIONS in parentTabs) // Child fee invoices only
+        assertTrue(GsmsTab.OPERATIONS in parentTabs)
         assertEquals(listOf("Finance"), RolePolicy.operationSections(PortalRole.PARENT, fullSchool))
         assertFalse(PortalRole.PARENT.has(RoleCapability.RECORD_FINANCE_PAYMENT))
         assertFalse(PortalRole.PARENT.has(RoleCapability.VIEW_AUDIT_LOGS))
 
-        val focusStudent = Student(id = "stu_1", fullName = "Amina Patel")
+        val linkedChild = Student(id = "stu_1", fullName = "Maya Lin", parentName = "Wei Lin", className = "Grade 10A")
+        val allStudents = listOf(linkedChild, Student(id = "stu_2", fullName = "Liam O'Connor", parentName = "Claire O'Connor", className = "Grade 10A"))
+        val filteredChildren = RolePolicy.filterStudentsForRole(PortalRole.PARENT, allStudents, linkedStudentIds = listOf("stu_1"))
+        assertEquals(listOf("stu_1"), filteredChildren.map { it.id })
+
         val financeEntries = listOf(
-            FinanceEntry(id = "1", entryType = "INVOICE", partyName = "Amina Patel"),
-            FinanceEntry(id = "2", entryType = "INVOICE", partyName = "Other Student"),
+            FinanceEntry(id = "1", entryType = "INVOICE", partyName = "Wei Lin", title = "Term 1 Tuition - Maya Lin"),
+            FinanceEntry(id = "2", entryType = "INVOICE", partyName = "Claire O'Connor", title = "Term 1 Tuition - Liam O'Connor"),
             FinanceEntry(id = "3", entryType = "PAYROLL", partyName = "Dr. Samuel")
         )
-        val parentFinance = RolePolicy.filterFinanceForRole(PortalRole.PARENT, financeEntries, focusStudent)
+        val parentFinance = RolePolicy.filterFinanceForRole(PortalRole.PARENT, financeEntries, filteredChildren)
         assertEquals(1, parentFinance.size)
-        assertEquals("Amina Patel", parentFinance.first().partyName)
+        assertEquals("Wei Lin", parentFinance.first().partyName)
+
+        val reports = listOf(
+            ReportCard(id = "r1", studentId = "stu_1", status = ReportStatus.PUBLISHED.name),
+            ReportCard(id = "r2", studentId = "stu_1", status = ReportStatus.SUBMITTED.name),
+            ReportCard(id = "r3", studentId = "stu_2", status = ReportStatus.PUBLISHED.name)
+        )
+        val visibleParentReports = RolePolicy.filterReportCardsForRole(PortalRole.PARENT, reports, linkedStudents = filteredChildren)
+        assertEquals(listOf("r1"), visibleParentReports.map { it.id })
     }
 
     @Test
-    fun specialistRoles_onlySeeTheirDepartmentModules() {
-        assertEquals(listOf("Finance"), RolePolicy.operationSections(PortalRole.FINANCE_OFFICER, fullSchool))
+    fun specialistAndNewlyAddedPortals_onlySeeTheirAuthorizedModules() {
+        assertEquals(listOf("Finance", "Procurement"), RolePolicy.operationSections(PortalRole.FINANCE_OFFICER, fullSchool))
         assertEquals(listOf("Library"), RolePolicy.operationSections(PortalRole.LIBRARIAN, fullSchool))
         assertEquals(listOf("Transport"), RolePolicy.operationSections(PortalRole.TRANSPORT_MANAGER, fullSchool))
-        assertEquals(listOf("Welfare", "Discipline", "Hostel"), RolePolicy.operationSections(PortalRole.WELFARE_NURSE, fullSchool))
-        assertEquals(listOf("Admissions", "Events"), RolePolicy.operationSections(PortalRole.ADMISSIONS_RECEPTION, fullSchool))
-        assertEquals(listOf("Staff & Faculty", "Leave Workflow"), RolePolicy.peopleSubTabs(PortalRole.HR_MANAGER, fullSchool))
-        assertTrue(PortalRole.HR_MANAGER.has(RoleCapability.APPROVE_LEAVE))
-        assertFalse(PortalRole.LIBRARIAN.has(RoleCapability.APPROVE_LEAVE))
+        assertEquals(listOf("Welfare", "Counselling", "Discipline", "Hostel"), RolePolicy.operationSections(PortalRole.WELFARE_NURSE, fullSchool))
+        assertEquals(listOf("Front Desk", "Admissions", "Events"), RolePolicy.operationSections(PortalRole.ADMISSIONS_RECEPTION, fullSchool))
+        assertEquals(listOf("Finance", "Procurement", "Stores"), RolePolicy.operationSections(PortalRole.PROCUREMENT_OFFICER, fullSchool))
+        assertEquals(listOf("Procurement", "Stores"), RolePolicy.operationSections(PortalRole.STOREKEEPER, fullSchool))
+        assertEquals(listOf("Welfare", "Counselling", "Discipline"), RolePolicy.operationSections(PortalRole.SCHOOL_COUNSELLOR, fullSchool))
+        assertEquals(listOf("Stores", "ICT Systems"), RolePolicy.operationSections(PortalRole.ICT_ADMIN, fullSchool))
+
+        assertTrue(PortalRole.DEPUTY_HEADTEACHER.has(RoleCapability.MODERATE_EXAMS))
+        assertTrue(PortalRole.EXAMINATION_OFFICER.has(RoleCapability.MANAGE_REPORT_TEMPLATES))
+        assertFalse(PortalRole.EXAMINATION_OFFICER.has(RoleCapability.APPROVE_PUBLISH_REPORT_CARDS))
+        assertTrue(PortalRole.ICT_ADMIN.has(RoleCapability.MANAGE_USER_PERMISSIONS))
+        assertFalse(PortalRole.ICT_ADMIN.has(RoleCapability.RECORD_FINANCE_PAYMENT))
+    }
+
+    @Test
+    fun delegatedExtraPermissions_grantAdditionalAccessWithoutChangingPrimaryRole() {
+        val teacherProfile = UserProfile(
+            userId = "u1",
+            primaryRole = PortalRole.TEACHER.name,
+            activeRole = PortalRole.SCHOOL_ADMIN.name, // Attempting mismatch should not override non-SUPER_ADMIN
+            extraPermissions = listOf(RoleCapability.APPROVE_LEAVE.name, RoleCapability.MANAGE_PROCUREMENT.name)
+        )
+        // Effective role MUST stay locked to primaryRole TEACHER
+        assertEquals(PortalRole.TEACHER, teacherProfile.resolvedEffectiveRole())
+        val extra = teacherProfile.resolvedExtraCapabilities()
+        assertTrue(teacherProfile.resolvedEffectiveRole().has(RoleCapability.APPROVE_LEAVE, extra))
+        assertTrue(teacherProfile.resolvedEffectiveRole().has(RoleCapability.MANAGE_PROCUREMENT, extra))
+        assertFalse(teacherProfile.resolvedEffectiveRole().has(RoleCapability.MANAGE_MODULES, extra))
+
+        // Delegated capability unlocks Procurement operations tab while preserving TEACHER primary role
+        val teacherTabsWithExtra = RolePolicy.visibleTabs(PortalRole.TEACHER, fullSchool, extra)
+        assertTrue(GsmsTab.OPERATIONS in teacherTabsWithExtra)
+        assertEquals(listOf("Procurement"), RolePolicy.operationSections(PortalRole.TEACHER, fullSchool, extra))
     }
 
     @Test

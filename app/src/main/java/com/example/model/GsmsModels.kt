@@ -14,24 +14,82 @@ data class UserProfile(
     val userId: String = "",
     val displayName: String = "",
     val email: String? = null,
+    val primaryRole: String = PortalRole.SUPER_ADMIN.name,
     val activeSchoolId: String? = null,
     val activeBranchId: String? = null,
     val activeRole: String = PortalRole.SCHOOL_ADMIN.name,
+    val assignedSchoolId: String? = null,
+    val assignedBranchIds: List<String> = listOf("branch_main"),
+    val assignedClasses: List<String> = emptyList(),
+    val assignedSubjects: List<String> = emptyList(),
+    val linkedStudentIds: List<String> = emptyList(),
+    val extraPermissions: List<String> = emptyList(),
     val lowDataMode: Boolean = false,
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 ) {
+    fun resolvedPrimaryRole(): PortalRole =
+        enumByNameOrDefault(primaryRole, PortalRole.SUPER_ADMIN)
+
+    fun resolvedEffectiveRole(): PortalRole {
+        val primary = resolvedPrimaryRole()
+        return if (primary == PortalRole.SUPER_ADMIN) {
+            enumByNameOrDefault(activeRole, PortalRole.SCHOOL_ADMIN)
+        } else {
+            primary
+        }
+    }
+
+    fun resolvedExtraCapabilities(): Set<RoleCapability> =
+        extraPermissions.mapNotNull { raw ->
+            enumValues<RoleCapability>().firstOrNull { it.name.equals(raw, ignoreCase = true) }
+        }.toSet()
+
     fun toCreateMap(): Map<String, Any> = mapOf(
         "userId" to userId,
         "displayName" to displayName,
         "email" to email,
+        "primaryRole" to primaryRole,
         "activeSchoolId" to activeSchoolId,
         "activeBranchId" to activeBranchId,
         "activeRole" to activeRole,
+        "assignedSchoolId" to assignedSchoolId,
+        "assignedBranchIds" to assignedBranchIds,
+        "assignedClasses" to assignedClasses,
+        "assignedSubjects" to assignedSubjects,
+        "linkedStudentIds" to linkedStudentIds,
+        "extraPermissions" to extraPermissions,
         "lowDataMode" to lowDataMode,
         "createdAt" to FieldValue.serverTimestamp(),
         "updatedAt" to FieldValue.serverTimestamp()
     ).filterValues { it != null } as Map<String, Any>
+}
+
+@Keep
+@IgnoreExtraProperties
+data class UserAccessAssignment(
+    @DocumentId val id: String = "",
+    val schoolId: String = "",
+    val ownerId: String = "",
+    val fullName: String = "",
+    val email: String = "",
+    val primaryRole: String = PortalRole.TEACHER.name,
+    val assignedBranchIds: List<String> = listOf("branch_main"),
+    val assignedClasses: List<String> = emptyList(),
+    val assignedSubjects: List<String> = emptyList(),
+    val linkedStudentIds: List<String> = emptyList(),
+    val extraPermissions: List<String> = emptyList(),
+    val active: Boolean = true,
+    val updatedBy: String? = null,
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+) {
+    fun resolvedRole(): PortalRole = enumByNameOrDefault(primaryRole, PortalRole.TEACHER)
+
+    fun resolvedExtraCapabilities(): Set<RoleCapability> =
+        extraPermissions.mapNotNull { raw ->
+            enumValues<RoleCapability>().firstOrNull { it.name.equals(raw, ignoreCase = true) }
+        }.toSet()
 }
 
 @Keep

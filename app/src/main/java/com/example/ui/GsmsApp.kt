@@ -24,11 +24,14 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.AiRepository
 import com.example.data.GsmsRepository
+import com.example.data.supabase.SupabaseSyncRepository
 import com.example.model.GsmsTab
 import com.example.model.PortalRole
 import com.example.model.RolePolicy
+import com.example.ui.theme.CobaltBlue
 import com.example.ui.theme.EmeraldTeal
 import com.example.ui.theme.GsmsTheme
+import com.example.ui.theme.WarmAmber
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -47,22 +50,48 @@ internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
 }
 
 @Composable
-fun GsmsAppNavigation(auth: FirebaseAuth = Firebase.auth) {
+fun GsmsAppNavigation(
+    auth: FirebaseAuth = Firebase.auth,
+    supabaseRepository: SupabaseSyncRepository = SupabaseSyncRepository.shared
+) {
     val currentUser by auth.authStateFlow()
         .collectAsStateWithLifecycle(initialValue = auth.currentUser)
-    val user = currentUser
+    val supabaseSession by supabaseRepository.sessionFlow.collectAsStateWithLifecycle()
+    val firebaseUser = currentUser
+    val emailSession = supabaseSession
 
-    if (user == null) {
-        GsmsTheme {
-            AuthScreen(onAuthSuccess = {})
+    when {
+        firebaseUser != null -> {
+            key("fb_${firebaseUser.uid}") {
+                GsmsTheme {
+                    GsmsAuthenticatedShell(
+                        authBackend = AuthBackend.FIREBASE,
+                        currentUserId = firebaseUser.uid,
+                        userDisplayName = firebaseUser.displayName ?: firebaseUser.email ?: "GSMS User",
+                        userEmail = firebaseUser.email,
+                        supabaseRepository = supabaseRepository
+                    )
+                }
+            }
         }
-    } else {
-        key(user.uid) {
+        emailSession != null -> {
+            key("sb_${emailSession.userId}") {
+                GsmsTheme {
+                    GsmsAuthenticatedShell(
+                        authBackend = AuthBackend.SUPABASE,
+                        currentUserId = emailSession.userId,
+                        userDisplayName = emailSession.displayName,
+                        userEmail = emailSession.email,
+                        supabaseRepository = supabaseRepository
+                    )
+                }
+            }
+        }
+        else -> {
             GsmsTheme {
-                GsmsAuthenticatedShell(
-                    currentUserId = user.uid,
-                    userDisplayName = user.displayName ?: user.email ?: "GSMS User",
-                    userEmail = user.email
+                AuthScreen(
+                    supabaseRepository = supabaseRepository,
+                    onAuthSuccess = {}
                 )
             }
         }
@@ -72,16 +101,18 @@ fun GsmsAppNavigation(auth: FirebaseAuth = Firebase.auth) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GsmsAuthenticatedShell(
+    authBackend: AuthBackend,
     currentUserId: String,
     userDisplayName: String,
-    userEmail: String?
+    userEmail: String?,
+    supabaseRepository: SupabaseSyncRepository
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
 
     val viewModel: GsmsViewModel = viewModel(
-        key = currentUserId,
+        key = "${authBackend.name}_$currentUserId",
         factory = viewModelFactory {
             initializer {
                 val app = checkNotNull(this[APPLICATION_KEY]) {
@@ -89,13 +120,22 @@ private fun GsmsAuthenticatedShell(
                 }
                 val repo = GsmsRepository(app.applicationContext)
                 val aiRepo = AiRepository()
-                GsmsViewModel(repo, aiRepo, currentUserId, userDisplayName, userEmail)
+                GsmsViewModel(
+                    repository = repo,
+                    aiRepository = aiRepo,
+                    currentUserId = currentUserId,
+                    userDisplayName = userDisplayName,
+                    userEmail = userEmail,
+                    supabaseRepository = supabaseRepository,
+                    authBackend = authBackend
+                )
             }
         }
     )
 
     val workspaceState by viewModel.uiState.collectAsStateWithLifecycle()
     val aiState by viewModel.aiState.collectAsStateWithLifecycle()
+    val supabaseState by viewModel.supabaseState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val focusStudentId by viewModel.focusStudentId.collectAsStateWithLifecycle()
     val bannerMessage by viewModel.statusBanner.collectAsStateWithLifecycle()
@@ -107,9 +147,12 @@ private fun GsmsAuthenticatedShell(
 
     val successWorkspace = (workspaceState as? UiState.Success)?.data
     val activeRole = successWorkspace?.activeRole ?: PortalRole.SCHOOL_ADMIN
+    val primaryRole = successWorkspace?.userProfile?.resolvedPrimaryRole() ?: PortalRole.SUPER_ADMIN
+    val canSwitchPortal = primaryRole == PortalRole.SUPER_ADMIN
     val activeSchool = successWorkspace?.activeSchool
-    val visibleTabs = remember(activeRole, activeSchool?.enabledModules) {
-        RolePolicy.visibleTabs(activeRole, activeSchool)
+    val activeExtra = successWorkspace?.activeExtraCapabilities ?: emptySet()
+    val visibleTabs = remember(activeRole, activeSchool?.enabledModules, activeExtra) {
+        RolePolicy.visibleTabs(activeRole, activeSchool, activeExtra)
     }
 
     LaunchedEffect(visibleTabs) {
@@ -133,17 +176,34 @@ private fun GsmsAuthenticatedShell(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(modifier = Modifier.widthIn(max = 320.dp)) {
+            ModalDrawerSheet(modifier = Modifier.widthIn(max = 336.dp)) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("GSMS Role Portals", style = MaterialTheme.typography.titleLarge)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("GSMS Role Portals (${PortalRole.entries.size})", style = MaterialTheme.typography.titleLarge)
+                        StatusPill(
+                            text = if (canSwitchPortal) "SWITCHABLE" else "LOCKED",
+                            color = if (canSwitchPortal) EmeraldTeal else WarmAmber
+                        )
+                    }
                     Text(
-                        "Each portal strictly enforces role permissions & data access",
+                        if (canSwitchPortal) {
+                            "Primary Role: ${primaryRole.shortTitle}. Switch portals to inspect RBAC isolation & delegated permissions."
+                        } else {
+                            "Locked to Primary Role: ${primaryRole.displayName}. Cross-portal switching is blocked."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (activeExtra.isNotEmpty()) {
+                        StatusPill("+${activeExtra.size} Delegated Permissions Active", CobaltBlue)
+                    }
                 }
                 HorizontalDivider()
                 LazyColumn(
@@ -169,6 +229,13 @@ private fun GsmsAuthenticatedShell(
                             badge = {
                                 if (isSelected) {
                                     StatusPill("ACTIVE", EmeraldTeal)
+                                } else if (!canSwitchPortal) {
+                                    Icon(
+                                        Icons.Rounded.Lock,
+                                        contentDescription = "Locked",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             },
                             onClick = {
@@ -212,8 +279,9 @@ private fun GsmsAuthenticatedShell(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                    val extraTag = if (activeExtra.isNotEmpty()) " (+${activeExtra.size})" else ""
                                     Text(
-                                        text = "${activeRole.shortTitle} • ${activeSchool?.activeAcademicYear ?: "2026/2027"} ${activeSchool?.activeTerm ?: "Term 1"}",
+                                        text = "${activeRole.shortTitle}$extraTag • ${activeSchool?.activeAcademicYear ?: "2026/2027"} ${activeSchool?.activeTerm ?: "Term 1"}",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.primary,
                                         maxLines = 1,
@@ -361,8 +429,10 @@ private fun GsmsAuthenticatedShell(
                                     GsmsTab.AI_GOVERNANCE -> AiAndGovernanceScreen(
                                         workspace = workspace,
                                         aiState = aiState,
+                                        supabaseState = supabaseState,
                                         viewModel = viewModel,
                                         onSignOut = {
+                                            scope.launch { supabaseRepository.signOut() }
                                             performSignOut(credentialManager, scope)
                                         }
                                     )
@@ -392,14 +462,21 @@ private fun roleIcon(role: PortalRole): ImageVector {
         PortalRole.SUPER_ADMIN -> Icons.Rounded.AdminPanelSettings
         PortalRole.SCHOOL_ADMIN -> Icons.Rounded.Domain
         PortalRole.HEADTEACHER -> Icons.Rounded.WorkspacePremium
+        PortalRole.DEPUTY_HEADTEACHER -> Icons.Rounded.SupervisorAccount
         PortalRole.TEACHER -> Icons.Rounded.MenuBook
-        PortalRole.STUDENT -> Icons.Rounded.School
+        PortalRole.CLASS_TEACHER -> Icons.Rounded.CoPresent
         PortalRole.PARENT -> Icons.Rounded.FamilyRestroom
+        PortalRole.STUDENT -> Icons.Rounded.School
         PortalRole.FINANCE_OFFICER -> Icons.Rounded.AccountBalanceWallet
+        PortalRole.HR_MANAGER -> Icons.Rounded.Badge
         PortalRole.LIBRARIAN -> Icons.Rounded.LocalLibrary
         PortalRole.TRANSPORT_MANAGER -> Icons.Rounded.DirectionsBus
-        PortalRole.HR_MANAGER -> Icons.Rounded.Badge
         PortalRole.WELFARE_NURSE -> Icons.Rounded.MedicalServices
         PortalRole.ADMISSIONS_RECEPTION -> Icons.Rounded.HowToReg
+        PortalRole.PROCUREMENT_OFFICER -> Icons.Rounded.ShoppingCartCheckout
+        PortalRole.STOREKEEPER -> Icons.Rounded.Warehouse
+        PortalRole.EXAMINATION_OFFICER -> Icons.Rounded.FactCheck
+        PortalRole.SCHOOL_COUNSELLOR -> Icons.Rounded.Psychology
+        PortalRole.ICT_ADMIN -> Icons.Rounded.Security
     }
 }

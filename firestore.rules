@@ -42,10 +42,223 @@ service cloud.firestore {
 
     function isValidRole(role) {
       return role in [
-        'SUPER_ADMIN', 'SCHOOL_ADMIN', 'HEADTEACHER', 'TEACHER',
-        'STUDENT', 'PARENT', 'FINANCE_OFFICER', 'LIBRARIAN',
-        'TRANSPORT_MANAGER', 'HR_MANAGER', 'WELFARE_NURSE', 'ADMISSIONS_RECEPTION'
+        'SUPER_ADMIN', 'SCHOOL_ADMIN', 'HEADTEACHER', 'DEPUTY_HEADTEACHER',
+        'TEACHER', 'CLASS_TEACHER', 'PARENT', 'STUDENT',
+        'FINANCE_OFFICER', 'HR_MANAGER', 'LIBRARIAN', 'TRANSPORT_MANAGER',
+        'WELFARE_NURSE', 'ADMISSIONS_RECEPTION', 'PROCUREMENT_OFFICER',
+        'STOREKEEPER', 'EXAMINATION_OFFICER', 'SCHOOL_COUNSELLOR', 'ICT_ADMIN'
       ];
+    }
+
+    // --- SINGLE-LOOKUP DATABASE RBAC & ANTI-ESCALATION HELPERS ---
+    // Note: fetchUserMap() is bound ONCE per get/create/update/delete rule (never inside allow list!).
+
+    function fetchUserMap() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        : {'primaryRole': 'SUPER_ADMIN', 'activeRole': 'SUPER_ADMIN'};
+    }
+
+    function isSuperAdminU(u) {
+      return !('primaryRole' in u) || u.primaryRole == 'SUPER_ADMIN';
+    }
+
+    function roleOfU(u) {
+      return !('primaryRole' in u)
+        ? ('activeRole' in u ? u.activeRole : 'SUPER_ADMIN')
+        : (u.primaryRole == 'SUPER_ADMIN'
+            ? ('activeRole' in u ? u.activeRole : 'SUPER_ADMIN')
+            : u.primaryRole);
+    }
+
+    function hasCapU(u, cap) {
+      return ('extraPermissions' in u) && (u.extraPermissions is list) && (cap in u.extraPermissions);
+    }
+
+    function inSchoolU(u, schoolId) {
+      return isSuperAdminU(u) ||
+             !('assignedSchoolId' in u) ||
+             u.assignedSchoolId == '' ||
+             u.assignedSchoolId == schoolId;
+    }
+
+    function inAssignedClassU(u, className) {
+      let r = roleOfU(u);
+      return !(r in ['TEACHER', 'CLASS_TEACHER']) ||
+             !('assignedClasses' in u) ||
+             !(u.assignedClasses is list) ||
+             u.assignedClasses.size() == 0 ||
+             className in u.assignedClasses;
+    }
+
+    function canManageTenantU(u, schoolId) {
+      let r = roleOfU(u);
+      return isSuperAdminU(u) ||
+             (inSchoolU(u, schoolId) && (r in ['SCHOOL_ADMIN', 'ICT_ADMIN'] || hasCapU(u, 'MANAGE_MODULES')));
+    }
+
+    function canDelegateU(u, schoolId) {
+      let r = roleOfU(u);
+      return isSuperAdminU(u) ||
+             (inSchoolU(u, schoolId) && (r in ['SCHOOL_ADMIN', 'ICT_ADMIN'] || hasCapU(u, 'MANAGE_USER_PERMISSIONS')));
+    }
+
+    function canEnrollU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (r in ['SCHOOL_ADMIN', 'ADMISSIONS_RECEPTION'] || hasCapU(u, 'ENROLL_STUDENT'));
+    }
+
+    function canEditAcademicsU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (r in ['SCHOOL_ADMIN', 'HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER', 'EXAMINATION_OFFICER'] ||
+              hasCapU(u, 'EDIT_ACADEMICS'));
+    }
+
+    function canMarkAttendanceU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (r in ['SCHOOL_ADMIN', 'HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER'] ||
+              hasCapU(u, 'MARK_ATTENDANCE'));
+    }
+
+    function canManageTemplatesU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (r in ['SCHOOL_ADMIN', 'HEADTEACHER', 'EXAMINATION_OFFICER'] ||
+              hasCapU(u, 'MANAGE_REPORT_TEMPLATES'));
+    }
+
+    function canFillReportsU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (r in ['SCHOOL_ADMIN', 'TEACHER', 'CLASS_TEACHER', 'EXAMINATION_OFFICER'] ||
+              hasCapU(u, 'FILL_SUBMIT_REPORT_CARDS'));
+    }
+
+    function canApproveReportsU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (r in ['SCHOOL_ADMIN', 'HEADTEACHER', 'DEPUTY_HEADTEACHER'] ||
+              hasCapU(u, 'APPROVE_PUBLISH_REPORT_CARDS'));
+    }
+
+    function canMutateFinanceU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (r in ['SCHOOL_ADMIN', 'FINANCE_OFFICER'] || hasCapU(u, 'RECORD_FINANCE_PAYMENT'));
+    }
+
+    function canApplyLeaveU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (!(r in ['PARENT', 'STUDENT', 'SUPER_ADMIN']) || hasCapU(u, 'APPLY_LEAVE'));
+    }
+
+    function canApproveLeaveU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (r in ['SCHOOL_ADMIN', 'HEADTEACHER', 'HR_MANAGER'] || hasCapU(u, 'APPROVE_LEAVE'));
+    }
+
+    function canComposeCommsU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (!(r in ['PARENT', 'STUDENT']) || hasCapU(u, 'COMPOSE_COMMUNICATIONS'));
+    }
+
+    function canWriteOpU(u, schoolId, moduleType) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) && (
+        r == 'SCHOOL_ADMIN' ||
+        (r in ['HEADTEACHER', 'DEPUTY_HEADTEACHER'] && moduleType in ['WELFARE', 'DISCIPLINE', 'COUNSELLING', 'ADMISSION', 'EVENT']) ||
+        (r == 'CLASS_TEACHER' && moduleType in ['WELFARE', 'DISCIPLINE']) ||
+        (r == 'LIBRARIAN' && moduleType in ['LIBRARY_BOOK', 'LIBRARY_BORROW']) ||
+        (r == 'TRANSPORT_MANAGER' && moduleType in ['VEHICLE', 'ROUTE', 'TRIP']) ||
+        (r == 'WELFARE_NURSE' && moduleType in ['WELFARE', 'DISCIPLINE', 'COUNSELLING', 'HOSTEL']) ||
+        (r == 'ADMISSIONS_RECEPTION' && moduleType in ['ADMISSION', 'FRONT_DESK', 'EVENT']) ||
+        (r == 'PROCUREMENT_OFFICER' && moduleType in ['PROCUREMENT', 'INVENTORY', 'ASSET']) ||
+        (r == 'STOREKEEPER' && moduleType in ['INVENTORY', 'ASSET', 'STOCK_MOVEMENT']) ||
+        (r == 'SCHOOL_COUNSELLOR' && moduleType in ['COUNSELLING', 'DISCIPLINE', 'WELFARE']) ||
+        (r == 'ICT_ADMIN' && moduleType in ['ICT_TICKET', 'ASSET', 'INVENTORY']) ||
+        (moduleType == 'PROCUREMENT' && hasCapU(u, 'MANAGE_PROCUREMENT')) ||
+        (moduleType in ['INVENTORY', 'ASSET', 'STOCK_MOVEMENT'] && hasCapU(u, 'MANAGE_STORES')) ||
+        (moduleType in ['COUNSELLING', 'DISCIPLINE', 'WELFARE'] && hasCapU(u, 'MANAGE_COUNSELLING')) ||
+        (moduleType in ['FRONT_DESK', 'ADMISSION', 'EVENT'] && hasCapU(u, 'MANAGE_FRONT_DESK')) ||
+        (moduleType == 'ICT_TICKET' && hasCapU(u, 'MANAGE_ICT_SYSTEMS')) ||
+        hasCapU(u, 'EDIT_OPERATIONS')
+      );
+    }
+
+    function canManageAlertsU(u, schoolId) {
+      let r = roleOfU(u);
+      return inSchoolU(u, schoolId) &&
+             (r in [
+               'SCHOOL_ADMIN', 'HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER',
+               'FINANCE_OFFICER', 'HR_MANAGER', 'TRANSPORT_MANAGER', 'WELFARE_NURSE',
+               'EXAMINATION_OFFICER', 'SCHOOL_COUNSELLOR', 'ICT_ADMIN'
+             ] || hasCapU(u, 'MANAGE_ALERTS'));
+    }
+
+    function canUpdateSchoolRule(schoolId) {
+      let u = fetchUserMap();
+      return (canManageTenantU(u, schoolId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'name', 'code', 'country', 'city', 'plan', 'subscriptionStatus',
+                'brandColorHex', 'activeAcademicYear', 'activeTerm', 'enabledModules',
+                'studentCount', 'staffCount', 'monthlyRevenueUsd', 'churnRiskScore', 'updatedAt'
+              ])) ||
+             (canEnrollU(u, schoolId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['studentCount', 'updatedAt']));
+    }
+
+    function canCreateStaffRule(schoolId) {
+      let u = fetchUserMap();
+      return inSchoolU(u, schoolId) && (roleOfU(u) in ['SCHOOL_ADMIN', 'HR_MANAGER'] || hasCapU(u, 'MANAGE_STAFF'));
+    }
+
+    function canUpdateStaffRule(schoolId) {
+      let u = fetchUserMap();
+      return canApproveLeaveU(u, schoolId) || hasCapU(u, 'MANAGE_STAFF');
+    }
+
+    function canCreateAcademicRule(schoolId) {
+      let u = fetchUserMap();
+      return canEditAcademicsU(u, schoolId) && inAssignedClassU(u, incoming().className);
+    }
+
+    function canUpdateAcademicRule(schoolId) {
+      let u = fetchUserMap();
+      return canEditAcademicsU(u, schoolId) && inAssignedClassU(u, existing().className);
+    }
+
+    function canCreateAttendanceRule(schoolId) {
+      let u = fetchUserMap();
+      return canMarkAttendanceU(u, schoolId) && (!('className' in incoming()) || inAssignedClassU(u, incoming().className));
+    }
+
+    function canCreateReportRule(schoolId) {
+      let u = fetchUserMap();
+      return canFillReportsU(u, schoolId) && inAssignedClassU(u, incoming().className);
+    }
+
+    function canUpdateReportRule(schoolId) {
+      let u = fetchUserMap();
+      return (canFillReportsU(u, schoolId) &&
+              inAssignedClassU(u, existing().className) &&
+              existing().status in ['DRAFT', 'RETURNED'] &&
+              incoming().status in ['DRAFT', 'SUBMITTED'] &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'subjectGradesSummary', 'averageScore', 'teacherRemarks', 'aiSummary',
+                'status', 'version', 'submittedBy', 'reviewedBy', 'updatedAt'
+              ])) ||
+             (canApproveReportsU(u, schoolId) &&
+              ((existing().status == 'SUBMITTED' && incoming().status in ['RETURNED', 'APPROVED']) ||
+               (existing().status == 'APPROVED' && incoming().status == 'PUBLISHED')) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'headteacherRemarks', 'status', 'version', 'reviewedBy', 'updatedAt'
+              ]));
     }
 
     // --- VALIDATION HELPERS ---
@@ -54,10 +267,32 @@ service cloud.firestore {
       return data.userId is string && data.userId == request.auth.uid &&
              data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
              (!('email' in data) || (data.email is string && data.email.size() <= 120)) &&
+             (!('primaryRole' in data) || (data.primaryRole is string && isValidRole(data.primaryRole))) &&
              (!('activeSchoolId' in data) || (data.activeSchoolId is string && data.activeSchoolId.size() <= 128)) &&
              (!('activeBranchId' in data) || (data.activeBranchId is string && data.activeBranchId.size() <= 128)) &&
              data.activeRole is string && isValidRole(data.activeRole) &&
+             (!('assignedSchoolId' in data) || (data.assignedSchoolId is string && data.assignedSchoolId.size() <= 128)) &&
+             (!('assignedBranchIds' in data) || (data.assignedBranchIds is list && data.assignedBranchIds.size() <= 20)) &&
+             (!('assignedClasses' in data) || (data.assignedClasses is list && data.assignedClasses.size() <= 30)) &&
+             (!('assignedSubjects' in data) || (data.assignedSubjects is list && data.assignedSubjects.size() <= 30)) &&
+             (!('linkedStudentIds' in data) || (data.linkedStudentIds is list && data.linkedStudentIds.size() <= 20)) &&
+             (!('extraPermissions' in data) || (data.extraPermissions is list && data.extraPermissions.size() <= 45)) &&
              data.lowDataMode is bool;
+    }
+
+    function isValidAccessAssignment(data, schoolId) {
+      return data.schoolId is string && data.schoolId == schoolId &&
+             data.ownerId is string && data.ownerId == request.auth.uid &&
+             data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 100 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+             data.primaryRole is string && isValidRole(data.primaryRole) &&
+             data.assignedBranchIds is list && data.assignedBranchIds.size() <= 20 &&
+             data.assignedClasses is list && data.assignedClasses.size() <= 30 &&
+             data.assignedSubjects is list && data.assignedSubjects.size() <= 30 &&
+             data.linkedStudentIds is list && data.linkedStudentIds.size() <= 20 &&
+             data.extraPermissions is list && data.extraPermissions.size() <= 45 &&
+             data.active is bool &&
+             (!('updatedBy' in data) || (data.updatedBy is string && data.updatedBy.size() <= 100));
     }
 
     function isValidSchool(data) {
@@ -71,7 +306,7 @@ service cloud.firestore {
              data.brandColorHex is string && data.brandColorHex.size() >= 4 && data.brandColorHex.size() <= 12 &&
              data.activeAcademicYear is string && data.activeAcademicYear.size() >= 2 && data.activeAcademicYear.size() <= 40 &&
              data.activeTerm is string && data.activeTerm.size() >= 2 && data.activeTerm.size() <= 40 &&
-             data.enabledModules is list && data.enabledModules.size() <= 25 &&
+             data.enabledModules is list && data.enabledModules.size() <= 30 &&
              (data.enabledModules.size() == 0 || data.enabledModules[0] is string) &&
              data.studentCount is int && data.studentCount >= 0 &&
              data.staffCount is int && data.staffCount >= 0 &&
@@ -237,7 +472,8 @@ service cloud.firestore {
              data.moduleType in [
                'LIBRARY_BOOK', 'LIBRARY_BORROW', 'VEHICLE', 'ROUTE', 'TRIP',
                'WELFARE', 'DISCIPLINE', 'INVENTORY', 'ASSET', 'HOSTEL',
-               'ADMISSION', 'EVENT', 'DOCUMENT_TEMPLATE'
+               'ADMISSION', 'EVENT', 'DOCUMENT_TEMPLATE',
+               'PROCUREMENT', 'STOCK_MOVEMENT', 'COUNSELLING', 'FRONT_DESK', 'ICT_TICKET'
              ] &&
              data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
              (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 200)) &&
@@ -251,7 +487,7 @@ service cloud.firestore {
       return data.schoolId is string && data.schoolId == schoolId &&
              data.branchId is string && data.branchId.size() >= 1 && data.branchId.size() <= 128 &&
              data.ownerId is string && data.ownerId == request.auth.uid &&
-             data.category in ['ACADEMIC', 'ATTENDANCE', 'FINANCE', 'BEHAVIOR', 'WELFARE', 'STAFFING'] &&
+             data.category in ['ACADEMIC', 'ATTENDANCE', 'FINANCE', 'BEHAVIOR', 'WELFARE', 'STAFFING', 'TRANSPORT', 'ICT'] &&
              isValidRiskLevel(data.riskLevel) &&
              data.targetName is string && data.targetName.size() >= 1 && data.targetName.size() <= 100 &&
              data.reason is string && data.reason.size() >= 2 && data.reason.size() <= 400 &&
@@ -281,8 +517,10 @@ service cloud.firestore {
                        isOwner(userId) &&
                        incoming().keys().hasAll(['userId', 'displayName', 'activeRole', 'lowDataMode', 'createdAt', 'updatedAt']) &&
                        incoming().keys().hasOnly([
-                         'userId', 'displayName', 'email', 'activeSchoolId',
-                         'activeBranchId', 'activeRole', 'lowDataMode', 'createdAt', 'updatedAt'
+                         'userId', 'displayName', 'email', 'primaryRole', 'activeSchoolId',
+                         'activeBranchId', 'activeRole', 'assignedSchoolId', 'assignedBranchIds',
+                         'assignedClasses', 'assignedSubjects', 'linkedStudentIds', 'extraPermissions',
+                         'lowDataMode', 'createdAt', 'updatedAt'
                        ]) &&
                        isValidTimestamp(incoming().createdAt) &&
                        isValidTimestamp(incoming().updatedAt) &&
@@ -294,20 +532,35 @@ service cloud.firestore {
                        incoming().createdAt == existing().createdAt &&
                        isValidTimestamp(incoming().updatedAt) &&
                        isValidUserProfile(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly([
-                         'displayName', 'email', 'activeSchoolId', 'activeBranchId',
-                         'activeRole', 'lowDataMode', 'updatedAt'
-                       ]);
+                       (
+                         ((!('primaryRole' in existing()) || existing().primaryRole == 'SUPER_ADMIN') &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'displayName', 'email', 'primaryRole', 'activeSchoolId', 'activeBranchId',
+                             'activeRole', 'assignedSchoolId', 'assignedBranchIds', 'assignedClasses',
+                             'assignedSubjects', 'linkedStudentIds', 'extraPermissions', 'lowDataMode', 'updatedAt'
+                           ]) &&
+                           (!('primaryRole' in existing()) || incoming().primaryRole == existing().primaryRole)
+                         ) ||
+                         ('primaryRole' in existing() && existing().primaryRole != 'SUPER_ADMIN' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'displayName', 'email', 'activeBranchId', 'lowDataMode', 'updatedAt'
+                           ]) &&
+                           (!('assignedBranchIds' in existing()) ||
+                             !('activeBranchId' in incoming()) ||
+                             incoming().activeBranchId in existing().assignedBranchIds)
+                         )
+                       );
 
       allow delete: if isValidId(userId) && isOwner(userId);
     }
 
     match /schools/{schoolId} {
-      allow get: if isValidId(schoolId) && isSignedIn() && existing().ownerId == request.auth.uid;
+      allow get: if isValidId(schoolId) && isSignedIn() && existing().ownerId == request.auth.uid && inSchoolU(fetchUserMap(), schoolId);
       allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
 
       allow create: if isValidId(schoolId) &&
                        isSignedIn() &&
+                       isSuperAdminU(fetchUserMap()) &&
                        incoming().keys().hasAll([
                          'ownerId', 'name', 'code', 'country', 'city', 'plan',
                          'subscriptionStatus', 'brandColorHex', 'activeAcademicYear',
@@ -331,38 +584,71 @@ service cloud.firestore {
                        incoming().createdAt == existing().createdAt &&
                        isValidTimestamp(incoming().updatedAt) &&
                        isValidSchool(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly([
-                         'name', 'code', 'country', 'city', 'plan', 'subscriptionStatus',
-                         'brandColorHex', 'activeAcademicYear', 'activeTerm', 'enabledModules',
-                         'studentCount', 'staffCount', 'monthlyRevenueUsd', 'churnRiskScore', 'updatedAt'
-                       ]);
+                       canUpdateSchoolRule(schoolId);
 
-      allow delete: if isValidId(schoolId) && isSignedIn() && existing().ownerId == request.auth.uid;
+      allow delete: if isValidId(schoolId) && isSignedIn() && existing().ownerId == request.auth.uid && isSuperAdminU(fetchUserMap());
 
       // --- TENANT SUBCOLLECTIONS ---
 
+      match /access_assignments/{assignmentId} {
+        allow get: if isValidId(schoolId) && isValidId(assignmentId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(schoolId) && isValidId(assignmentId) && isSignedIn() &&
+                         schoolExists(schoolId) &&
+                         canDelegateU(fetchUserMap(), schoolId) &&
+                         incoming().primaryRole != 'SUPER_ADMIN' &&
+                         incoming().keys().hasAll([
+                           'schoolId', 'ownerId', 'fullName', 'email', 'primaryRole',
+                           'assignedBranchIds', 'assignedClasses', 'assignedSubjects',
+                           'linkedStudentIds', 'extraPermissions', 'active', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'schoolId', 'ownerId', 'fullName', 'email', 'primaryRole',
+                           'assignedBranchIds', 'assignedClasses', 'assignedSubjects',
+                           'linkedStudentIds', 'extraPermissions', 'active', 'updatedBy', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidAccessAssignment(incoming(), schoolId);
+        allow update: if isValidId(schoolId) && isValidId(assignmentId) && isOwner(existing().ownerId) &&
+                         canDelegateU(fetchUserMap(), schoolId) &&
+                         incoming().ownerId == existing().ownerId &&
+                         incoming().schoolId == existing().schoolId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidAccessAssignment(incoming(), schoolId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'fullName', 'assignedBranchIds', 'assignedClasses', 'assignedSubjects',
+                           'linkedStudentIds', 'extraPermissions', 'active', 'updatedBy', 'updatedAt'
+                         ]);
+        allow delete: if isValidId(schoolId) && isValidId(assignmentId) && isOwner(existing().ownerId) && canDelegateU(fetchUserMap(), schoolId);
+      }
+
       match /branches/{branchId} {
-        allow get: if isValidId(schoolId) && isValidId(branchId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(branchId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(branchId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canManageTenantU(fetchUserMap(), schoolId) &&
                          incoming().keys().hasAll(['schoolId', 'ownerId', 'name', 'code', 'city', 'mainCampus', 'createdAt', 'updatedAt']) &&
                          incoming().keys().hasOnly(['schoolId', 'ownerId', 'name', 'code', 'city', 'mainCampus', 'createdAt', 'updatedAt']) &&
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidBranch(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(branchId) && isOwner(existing().ownerId) &&
+                         canManageTenantU(fetchUserMap(), schoolId) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidBranch(incoming(), schoolId) &&
                          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'code', 'city', 'mainCampus', 'updatedAt']);
-        allow delete: if isValidId(schoolId) && isValidId(branchId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(branchId) && isOwner(existing().ownerId) && canManageTenantU(fetchUserMap(), schoolId);
       }
 
       match /students/{studentId} {
-        allow get: if isValidId(schoolId) && isValidId(studentId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(studentId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(studentId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canEnrollU(fetchUserMap(), schoolId) &&
                          incoming().keys().hasAll([
                            'schoolId', 'branchId', 'ownerId', 'admissionNo', 'fullName',
                            'className', 'parentName', 'attendanceRate', 'averageScore',
@@ -377,6 +663,7 @@ service cloud.firestore {
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidStudent(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(studentId) && isOwner(existing().ownerId) &&
+                         canEnrollU(fetchUserMap(), schoolId) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidStudent(incoming(), schoolId) &&
@@ -384,14 +671,15 @@ service cloud.firestore {
                            'branchId', 'fullName', 'className', 'stream', 'parentName', 'parentContact',
                            'attendanceRate', 'averageScore', 'feeBalanceUsd', 'riskLevel', 'welfareStatus', 'updatedAt'
                          ]);
-        allow delete: if isValidId(schoolId) && isValidId(studentId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(studentId) && isOwner(existing().ownerId) && canManageTenantU(fetchUserMap(), schoolId);
       }
 
       match /staff/{staffId} {
-        allow get: if isValidId(schoolId) && isValidId(staffId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(staffId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(staffId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canCreateStaffRule(schoolId) &&
                          incoming().keys().hasAll([
                            'schoolId', 'branchId', 'ownerId', 'staffNo', 'fullName',
                            'roleTitle', 'department', 'leaveBalanceDays', 'leaveUsedDays',
@@ -405,6 +693,7 @@ service cloud.firestore {
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidStaffMember(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(staffId) && isOwner(existing().ownerId) &&
+                         canUpdateStaffRule(schoolId) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidStaffMember(incoming(), schoolId) &&
@@ -412,14 +701,15 @@ service cloud.firestore {
                            'branchId', 'fullName', 'roleTitle', 'department', 'subjectsSummary',
                            'leaveBalanceDays', 'leaveUsedDays', 'onLeave', 'workloadHours', 'updatedAt'
                          ]);
-        allow delete: if isValidId(schoolId) && isValidId(staffId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(staffId) && isOwner(existing().ownerId) && canManageTenantU(fetchUserMap(), schoolId);
       }
 
       match /academics/{recordId} {
-        allow get: if isValidId(schoolId) && isValidId(recordId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(recordId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(recordId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canCreateAcademicRule(schoolId) &&
                          incoming().keys().hasAll([
                            'schoolId', 'branchId', 'academicYear', 'term', 'ownerId',
                            'recordType', 'title', 'className', 'score', 'maxScore', 'createdAt', 'updatedAt'
@@ -432,6 +722,7 @@ service cloud.firestore {
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidAcademicRecord(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(recordId) && isOwner(existing().ownerId) &&
+                         canUpdateAcademicRule(schoolId) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidAcademicRecord(incoming(), schoolId) &&
@@ -439,14 +730,15 @@ service cloud.firestore {
                            'title', 'className', 'subjectName', 'teacherName',
                            'scheduleSlot', 'score', 'maxScore', 'grade', 'updatedAt'
                          ]);
-        allow delete: if isValidId(schoolId) && isValidId(recordId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(recordId) && isOwner(existing().ownerId) && canEditAcademicsU(fetchUserMap(), schoolId);
       }
 
       match /attendance/{attendanceId} {
-        allow get: if isValidId(schoolId) && isValidId(attendanceId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(attendanceId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(attendanceId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canCreateAttendanceRule(schoolId) &&
                          incoming().keys().hasAll([
                            'schoolId', 'branchId', 'academicYear', 'term', 'ownerId',
                            'targetType', 'targetName', 'dateIso', 'status', 'createdAt', 'updatedAt'
@@ -458,35 +750,40 @@ service cloud.firestore {
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidAttendanceRecord(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(attendanceId) && isOwner(existing().ownerId) &&
+                         canMarkAttendanceU(fetchUserMap(), schoolId) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidAttendanceRecord(incoming(), schoolId) &&
                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
-        allow delete: if isValidId(schoolId) && isValidId(attendanceId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(attendanceId) && isOwner(existing().ownerId) && canMarkAttendanceU(fetchUserMap(), schoolId);
       }
 
       match /report_templates/{templateId} {
-        allow get: if isValidId(schoolId) && isValidId(templateId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(templateId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(templateId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canManageTemplatesU(fetchUserMap(), schoolId) &&
                          incoming().keys().hasAll(['schoolId', 'ownerId', 'name', 'classLevel', 'sections', 'gradingScale', 'active', 'createdAt', 'updatedAt']) &&
                          incoming().keys().hasOnly(['schoolId', 'ownerId', 'name', 'classLevel', 'sections', 'gradingScale', 'active', 'createdAt', 'updatedAt']) &&
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidReportTemplate(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(templateId) && isOwner(existing().ownerId) &&
+                         canManageTemplatesU(fetchUserMap(), schoolId) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidReportTemplate(incoming(), schoolId) &&
                          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'classLevel', 'sections', 'gradingScale', 'active', 'updatedAt']);
-        allow delete: if isValidId(schoolId) && isValidId(templateId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(templateId) && isOwner(existing().ownerId) && canManageTemplatesU(fetchUserMap(), schoolId);
       }
 
       match /report_cards/{reportId} {
-        allow get: if isValidId(schoolId) && isValidId(reportId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(reportId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(reportId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canCreateReportRule(schoolId) &&
+                         incoming().status in ['DRAFT', 'SUBMITTED'] &&
                          incoming().keys().hasAll([
                            'schoolId', 'branchId', 'academicYear', 'term', 'ownerId',
                            'studentId', 'studentName', 'className', 'templateId', 'templateName',
@@ -505,23 +802,17 @@ service cloud.firestore {
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidReportCard(incoming(), schoolId) &&
-                         (
-                           (existing().status != 'PUBLISHED' && incoming().diff(existing()).affectedKeys().hasOnly([
-                             'subjectGradesSummary', 'averageScore', 'teacherRemarks', 'aiSummary',
-                             'headteacherRemarks', 'status', 'version', 'submittedBy', 'reviewedBy', 'updatedAt'
-                           ])) ||
-                           // Allow publishing transition or revision increment
-                           (existing().status == 'APPROVED' && incoming().status == 'PUBLISHED' &&
-                            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'version', 'reviewedBy', 'updatedAt']))
-                         );
-        allow delete: if isValidId(schoolId) && isValidId(reportId) && isOwner(existing().ownerId);
+                         existing().status != 'PUBLISHED' &&
+                         canUpdateReportRule(schoolId);
+        allow delete: if isValidId(schoolId) && isValidId(reportId) && isOwner(existing().ownerId) && canManageTenantU(fetchUserMap(), schoolId);
       }
 
       match /finance/{financeId} {
-        allow get: if isValidId(schoolId) && isValidId(financeId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(financeId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(financeId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canMutateFinanceU(fetchUserMap(), schoolId) &&
                          incoming().keys().hasAll([
                            'schoolId', 'branchId', 'academicYear', 'term', 'ownerId',
                            'entryType', 'referenceNo', 'title', 'partyName', 'category',
@@ -535,18 +826,21 @@ service cloud.firestore {
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidFinanceEntry(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(financeId) && isOwner(existing().ownerId) &&
+                         canMutateFinanceU(fetchUserMap(), schoolId) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidFinanceEntry(incoming(), schoolId) &&
                          incoming().diff(existing()).affectedKeys().hasOnly(['paidUsd', 'status', 'category', 'updatedAt']);
-        allow delete: if isValidId(schoolId) && isValidId(financeId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(financeId) && isOwner(existing().ownerId) && canMutateFinanceU(fetchUserMap(), schoolId);
       }
 
       match /leave_requests/{leaveId} {
-        allow get: if isValidId(schoolId) && isValidId(leaveId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(leaveId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(leaveId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canApplyLeaveU(fetchUserMap(), schoolId) &&
+                         incoming().status == 'PENDING' &&
                          incoming().keys().hasAll([
                            'schoolId', 'branchId', 'ownerId', 'staffId', 'staffName',
                            'roleTitle', 'leaveType', 'startDate', 'endDate', 'daysCount',
@@ -561,19 +855,22 @@ service cloud.firestore {
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidLeaveRequest(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(leaveId) && isOwner(existing().ownerId) &&
+                         canApproveLeaveU(fetchUserMap(), schoolId) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          existing().status == 'PENDING' &&
+                         incoming().status in ['APPROVED', 'REJECTED'] &&
                          isValidLeaveRequest(incoming(), schoolId) &&
                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedBy', 'aiConflictNote', 'updatedAt']);
-        allow delete: if isValidId(schoolId) && isValidId(leaveId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(leaveId) && isOwner(existing().ownerId) && canApproveLeaveU(fetchUserMap(), schoolId);
       }
 
       match /communications/{commId} {
-        allow get: if isValidId(schoolId) && isValidId(commId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(commId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(commId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canComposeCommsU(fetchUserMap(), schoolId) &&
                          incoming().keys().hasAll([
                            'schoolId', 'branchId', 'ownerId', 'channel', 'audience',
                            'title', 'body', 'senderName', 'senderRole', 'aiDrafted', 'createdAt', 'updatedAt'
@@ -585,18 +882,20 @@ service cloud.firestore {
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidCommunication(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(commId) && isOwner(existing().ownerId) &&
+                         canComposeCommsU(fetchUserMap(), schoolId) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidCommunication(incoming(), schoolId) &&
                          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'body', 'audience', 'updatedAt']);
-        allow delete: if isValidId(schoolId) && isValidId(commId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(commId) && isOwner(existing().ownerId) && canComposeCommsU(fetchUserMap(), schoolId);
       }
 
       match /operations/{opId} {
-        allow get: if isValidId(schoolId) && isValidId(opId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(opId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(opId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canWriteOpU(fetchUserMap(), schoolId, incoming().moduleType) &&
                          incoming().keys().hasAll([
                            'schoolId', 'branchId', 'ownerId', 'moduleType', 'title',
                            'status', 'createdAt', 'updatedAt'
@@ -609,18 +908,20 @@ service cloud.firestore {
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidOperation(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(opId) && isOwner(existing().ownerId) &&
+                         canWriteOpU(fetchUserMap(), schoolId, existing().moduleType) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidOperation(incoming(), schoolId) &&
                          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'subtitle', 'partyName', 'status', 'metricLabel', 'notes', 'updatedAt']);
-        allow delete: if isValidId(schoolId) && isValidId(opId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(opId) && isOwner(existing().ownerId) && canWriteOpU(fetchUserMap(), schoolId, existing().moduleType);
       }
 
       match /alerts/{alertId} {
-        allow get: if isValidId(schoolId) && isValidId(alertId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(alertId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(alertId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         canManageAlertsU(fetchUserMap(), schoolId) &&
                          incoming().keys().hasAll([
                            'schoolId', 'branchId', 'ownerId', 'category', 'riskLevel',
                            'targetName', 'reason', 'recommendedAction', 'assignedRole',
@@ -634,18 +935,20 @@ service cloud.firestore {
                          isValidTimestamp(incoming().createdAt) && isValidTimestamp(incoming().updatedAt) &&
                          isValidAlert(incoming(), schoolId);
         allow update: if isValidId(schoolId) && isValidId(alertId) && isOwner(existing().ownerId) &&
+                         canManageAlertsU(fetchUserMap(), schoolId) &&
                          incoming().ownerId == existing().ownerId && incoming().schoolId == existing().schoolId &&
                          incoming().createdAt == existing().createdAt && isValidTimestamp(incoming().updatedAt) &&
                          isValidAlert(incoming(), schoolId) &&
                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'assignedRole', 'recommendedAction', 'updatedAt']);
-        allow delete: if isValidId(schoolId) && isValidId(alertId) && isOwner(existing().ownerId);
+        allow delete: if isValidId(schoolId) && isValidId(alertId) && isOwner(existing().ownerId) && canManageAlertsU(fetchUserMap(), schoolId);
       }
 
       match /audit_logs/{logId} {
-        allow get: if isValidId(schoolId) && isValidId(logId) && isOwner(existing().ownerId);
+        allow get: if isValidId(schoolId) && isValidId(logId) && isOwner(existing().ownerId) && inSchoolU(fetchUserMap(), schoolId);
         allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
         allow create: if isValidId(schoolId) && isValidId(logId) && isSignedIn() &&
                          schoolExists(schoolId) &&
+                         inSchoolU(fetchUserMap(), schoolId) &&
                          incoming().keys().hasAll([
                            'schoolId', 'ownerId', 'actorName', 'actorRole',
                            'actionType', 'moduleName', 'summary', 'aiAction', 'createdAt'

@@ -22,8 +22,9 @@ fun AnalyticsAndCommsScreen(
 ) {
     val school = workspace.activeSchool ?: return
     val role = workspace.activeRole
-    val tabs = remember(role, school.enabledModules) {
-        RolePolicy.analyticsSubTabs(role, school)
+    val extra = workspace.activeExtraCapabilities
+    val tabs = remember(role, school.enabledModules, extra) {
+        RolePolicy.analyticsSubTabs(role, school, extra)
     }
     var selectedTab by remember(tabs) { mutableIntStateOf(0) }
     var showNewMessageDialog by remember { mutableStateOf(false) }
@@ -48,8 +49,11 @@ fun AnalyticsAndCommsScreen(
 
         when (tabs.getOrNull(selectedTab)) {
             "Analytics & Alerts", "Role Alerts" -> {
-                val showCharts = role.has(RoleCapability.VIEW_ANALYTICS_CHARTS)
-                val canManageAlerts = role.has(RoleCapability.MANAGE_ALERTS)
+                val showCharts = role.has(RoleCapability.VIEW_ANALYTICS_CHARTS, extra)
+                val canManageAlerts = role.has(RoleCapability.MANAGE_ALERTS, extra)
+                val scopedStudents = RolePolicy.filterStudentsForRole(
+                    role, workspace.students, workspace.assignedClasses, workspace.linkedStudentIds
+                )
                 val roleAlerts = RolePolicy.filterAlertsForRole(role, workspace.alerts)
                 val filteredAlerts = roleAlerts.filter {
                     searchQuery.isBlank() || it.targetName.contains(searchQuery, true) || it.reason.contains(searchQuery, true)
@@ -64,7 +68,7 @@ fun AnalyticsAndCommsScreen(
                             BarChartCard(
                                 title = "Class & Learner Mastery Analytics",
                                 subtitle = "Live student average score breakdown",
-                                bars = workspace.students.take(5).map {
+                                bars = scopedStudents.take(5).map {
                                     it.fullName.substringBefore(" ") to it.averageScore.toFloat()
                                 },
                                 barColor = CobaltBlue
@@ -72,9 +76,9 @@ fun AnalyticsAndCommsScreen(
                         }
                         item {
                             TrendSparklineCard(
-                                title = "School Attendance Stability",
-                                headlineValue = "${if (workspace.students.isEmpty()) 94.0 else workspace.students.map { it.attendanceRate }.average().toInt()}%",
-                                points = workspace.students.map { it.attendanceRate.toFloat() }.ifEmpty { listOf(91f, 93f, 95f, 94f) },
+                                title = "Attendance Stability",
+                                headlineValue = "${if (scopedStudents.isEmpty()) 94 else scopedStudents.map { it.attendanceRate }.average().toInt()}%",
+                                points = scopedStudents.map { it.attendanceRate.toFloat() }.ifEmpty { listOf(91f, 93f, 95f, 94f) },
                                 lineColor = EmeraldTeal
                             )
                         }
@@ -133,7 +137,7 @@ fun AnalyticsAndCommsScreen(
             }
 
             "Communications" -> {
-                val canCompose = role.has(RoleCapability.COMPOSE_COMMUNICATIONS)
+                val canCompose = role.has(RoleCapability.COMPOSE_COMMUNICATIONS, extra)
                 val visibleComms = RolePolicy.filterCommunicationsForRole(role, workspace.communications).filter {
                     searchQuery.isBlank() || it.title.contains(searchQuery, true) || it.body.contains(searchQuery, true)
                 }
@@ -198,7 +202,7 @@ fun AnalyticsAndCommsScreen(
                     item {
                         SectionHeader(
                             title = "Immutable Security & AI Audit Trail",
-                            subtitle = "Every approval, module toggle, and AI generation is permanently logged"
+                            subtitle = "Every approval, permission delegation, and AI generation is permanently logged"
                         )
                     }
                     items(workspace.auditLogs) { log ->

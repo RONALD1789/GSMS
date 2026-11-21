@@ -2,20 +2,53 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "Authenticated user profile, active tenant selection, portal role, and low-data preference.",
+      "description": "Authenticated user profile, authoritative primaryRole, tenant scope, and delegated extraPermissions.",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
         "displayName": { "type": "string" },
         "email": { "type": "string" },
+        "primaryRole": { "type": "string" },
         "activeSchoolId": { "type": "string" },
         "activeBranchId": { "type": "string" },
         "activeRole": { "type": "string" },
+        "assignedSchoolId": { "type": "string" },
+        "assignedBranchIds": { "type": "array" },
+        "assignedClasses": { "type": "array" },
+        "assignedSubjects": { "type": "array" },
+        "linkedStudentIds": { "type": "array" },
+        "extraPermissions": { "type": "array" },
         "lowDataMode": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "displayName", "activeRole", "lowDataMode", "createdAt", "updatedAt"]
+      "required": ["userId", "displayName", "primaryRole", "activeRole", "lowDataMode", "createdAt", "updatedAt"]
+    },
+    "UserAccessAssignment": {
+      "title": "UserAccessAssignment",
+      "description": "Per-user scoped access & delegated extraPermissions assignment within a school without changing primaryRole.",
+      "type": "object",
+      "properties": {
+        "schoolId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "primaryRole": { "type": "string" },
+        "assignedBranchIds": { "type": "array" },
+        "assignedClasses": { "type": "array" },
+        "assignedSubjects": { "type": "array" },
+        "linkedStudentIds": { "type": "array" },
+        "extraPermissions": { "type": "array" },
+        "active": { "type": "boolean" },
+        "updatedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "schoolId", "ownerId", "fullName", "email", "primaryRole",
+        "assignedBranchIds", "assignedClasses", "assignedSubjects",
+        "linkedStudentIds", "extraPermissions", "active", "createdAt", "updatedAt"
+      ]
     },
     "School": {
       "title": "School",
@@ -301,7 +334,7 @@
     },
     "OperationRecord": {
       "title": "OperationRecord",
-      "description": "Unified operational record for library, transport, welfare, discipline, inventory/assets, hostel, admissions, events, and documents.",
+      "description": "Operational records for library, transport, welfare, discipline, procurement, stores, counselling, front desk, ICT, hostel, admissions, events.",
       "type": "object",
       "properties": {
         "schoolId": { "type": "string" },
@@ -348,7 +381,7 @@
     },
     "AuditLog": {
       "title": "AuditLog",
-      "description": "Immutable audit log for workflow transitions, module toggles, and AI actions.",
+      "description": "Immutable audit log for workflow transitions, module toggles, RBAC delegations, and AI actions.",
       "type": "object",
       "properties": {
         "schoolId": { "type": "string" },
@@ -370,11 +403,15 @@
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
-      "description": "Authenticated user profile and portal session settings."
+      "description": "Authenticated user profile, primaryRole, scope, and portal session settings."
     },
     "/schools/{schoolId}": {
       "schema": { "$ref": "#/entities/School" },
       "description": "Multi-tenant school root documents."
+    },
+    "/schools/{schoolId}/access_assignments/{assignmentId}": {
+      "schema": { "$ref": "#/entities/UserAccessAssignment" },
+      "description": "User RBAC scopes and delegated extraPermissions within a school."
     },
     "/schools/{schoolId}/branches/{branchId}": {
       "schema": { "$ref": "#/entities/Branch" },
@@ -418,7 +455,7 @@
     },
     "/schools/{schoolId}/operations/{opId}": {
       "schema": { "$ref": "#/entities/OperationRecord" },
-      "description": "Library, transport, welfare, discipline, inventory, hostel, admissions, and events."
+      "description": "Operational records across library, transport, welfare, discipline, procurement, stores, counselling, front desk, ICT, hostel, admissions, and events."
     },
     "/schools/{schoolId}/alerts/{alertId}": {
       "schema": { "$ref": "#/entities/EarlyWarningAlert" },

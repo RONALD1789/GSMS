@@ -32,6 +32,17 @@ class GsmsRepository(private val db: FirebaseFirestore) {
             ?: throw IllegalStateException("User must be signed in with Google before accessing Firestore.")
     }
 
+    private fun requireActorCapability(
+        actorRole: PortalRole,
+        capability: RoleCapability,
+        extra: Set<RoleCapability>,
+        actionLabel: String
+    ) {
+        if (!actorRole.has(capability, extra)) {
+            throw SecurityException("RBAC denied: ${actorRole.shortTitle} is not authorized to $actionLabel.")
+        }
+    }
+
     suspend fun ensureWorkspaceInitialized(
         uid: String,
         displayName: String,
@@ -42,11 +53,45 @@ class GsmsRepository(private val db: FirebaseFirestore) {
             check(currentUid == uid) { "Authenticated UID mismatch." }
             val existingSchools = db.collection("schools")
                 .whereEqualTo("ownerId", uid)
-                .limit(1)
                 .get()
                 .await()
             if (existingSchools.isEmpty) {
                 GsmsSeedData.seedInitialMultiTenantWorkspace(db, uid, displayName, email)
+            } else {
+                // Backfill legacy user profiles & access_assignments cleanly
+                val firstSchoolId = existingSchools.documents.first().id
+                val userDoc = db.collection("users").document(uid).get().await()
+                if (userDoc.exists() && !userDoc.contains("primaryRole")) {
+                    db.collection("users").document(uid).update(
+                        mapOf(
+                            "primaryRole" to PortalRole.SUPER_ADMIN.name,
+                            "assignedSchoolId" to (userDoc.getString("activeSchoolId") ?: firstSchoolId),
+                            "assignedBranchIds" to listOf("branch_main", "branch_north"),
+                            "assignedClasses" to listOf("Grade 10A"),
+                            "assignedSubjects" to listOf("Mathematics", "Physics"),
+                            "linkedStudentIds" to listOf("stu_1"),
+                            "extraPermissions" to emptyList<String>(),
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    ).await()
+                }
+                val assignSnap = db.collection("schools").document(firstSchoolId)
+                    .collection("access_assignments")
+                    .whereEqualTo("ownerId", uid)
+                    .limit(1)
+                    .get()
+                    .await()
+                if (assignSnap.isEmpty) {
+                    GsmsSeedData.seedAccessAssignmentsForSchool(db, uid, firstSchoolId)
+                }
+                // Ensure newly added modules (PROCUREMENT, ICT_SYSTEMS) exist on existing primary school
+                val firstModules = existingSchools.documents.first().get("enabledModules") as? List<*>
+                if (firstModules != null && (!firstModules.contains(GsmsModule.PROCUREMENT.name) || !firstModules.contains(GsmsModule.ICT_SYSTEMS.name))) {
+                    val updated = (firstModules.filterIsInstance<String>() + listOf(GsmsModule.PROCUREMENT.name, GsmsModule.ICT_SYSTEMS.name)).distinct()
+                    db.collection("schools").document(firstSchoolId).update(
+                        mapOf("enabledModules" to updated, "updatedAt" to FieldValue.serverTimestamp())
+                    ).await()
+                }
             }
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -69,6 +114,9 @@ class GsmsRepository(private val db: FirebaseFirestore) {
             .snapshots()
             .map { snap -> snap.toObjects(School::class.java, ServerTimestampBehavior.ESTIMATE) }
             .catch { error -> handleStreamError(error, OperationType.LIST, "schools", uid) }
+
+    fun observeAccessAssignments(uid: String, schoolId: String): Flow<List<UserAccessAssignment>> =
+        observeSchoolCollection(uid, schoolId, "access_assignments", UserAccessAssignment::class.java)
 
     fun observeBranches(uid: String, schoolId: String): Flow<List<Branch>> =
         observeSchoolCollection(uid, schoolId, "branches", Branch::class.java)
@@ -171,15 +219,142 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         }
     }
 
+    suspend fun updateUserScopePreferences(
+        assignedClasses: List<String>? = null,
+        assignedSubjects: List<String>? = null,
+        linkedStudentIds: List<String>? = null
+    ): Result<Unit> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
+        val path = "users/$uid"
+        return try {
+            val updates = mutableMapOf<String, Any>("updatedAt" to FieldValue.serverTimestamp())
+            if (assignedClasses != null) updates["assignedClasses"] = assignedClasses
+            if (assignedSubjects != null) updates["assignedSubjects"] = assignedSubjects
+            if (linkedStudentIds != null) updates["linkedStudentIds"] = linkedStudentIds
+            db.collection("users").document(uid).update(updates).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun delegateUserPermissions(
+        schoolId: String,
+        assignment: UserAccessAssignment,
+        newExtraPermissions: List<String>,
+        newAssignedClasses: List<String>,
+        newAssignedSubjects: List<String>,
+        newLinkedStudentIds: List<String>,
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
+    ): Result<Unit> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
+        val path = "schools/$schoolId/access_assignments/${assignment.id}"
+        return try {
+            requireActorCapability(actorRole, RoleCapability.MANAGE_USER_PERMISSIONS, actorExtra, "delegate user permissions")
+            // Primary role is NEVER altered by permission delegation
+            db.collection("schools").document(schoolId)
+                .collection("access_assignments").document(assignment.id)
+                .update(
+                    mapOf(
+                        "extraPermissions" to newExtraPermissions.distinct().take(45),
+                        "assignedClasses" to newAssignedClasses.distinct().take(30),
+                        "assignedSubjects" to newAssignedSubjects.distinct().take(30),
+                        "linkedStudentIds" to newLinkedStudentIds.distinct().take(20),
+                        "updatedBy" to actorName.take(100),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            appendAuditLog(
+                schoolId = schoolId,
+                uid = uid,
+                actorName = actorName,
+                actorRole = actorRole.name,
+                actionType = "PERMISSIONS_DELEGATED",
+                moduleName = "ICT_SYSTEMS",
+                summary = "Updated delegated permissions (${newExtraPermissions.size}) for ${assignment.fullName} without altering primaryRole (${assignment.primaryRole})",
+                aiAction = false
+            )
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createAccessAssignment(
+        schoolId: String,
+        fullName: String,
+        email: String,
+        primaryRole: PortalRole,
+        assignedClasses: List<String>,
+        assignedSubjects: List<String>,
+        linkedStudentIds: List<String>,
+        extraPermissions: List<String>,
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
+    ): Result<Unit> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
+        val path = "schools/$schoolId/access_assignments"
+        return try {
+            requireActorCapability(actorRole, RoleCapability.MANAGE_USER_PERMISSIONS, actorExtra, "create user access assignment")
+            require(primaryRole != PortalRole.SUPER_ADMIN) { "Cannot assign SUPER_ADMIN at school level." }
+            require(fullName.trim().length in 2..100) { "Full name must be 2–100 characters." }
+            require(email.trim().length in 3..120) { "Valid email is required." }
+            db.collection("schools").document(schoolId)
+                .collection("access_assignments").document()
+                .set(
+                    mapOf(
+                        "schoolId" to schoolId,
+                        "ownerId" to uid,
+                        "fullName" to fullName.trim(),
+                        "email" to email.trim(),
+                        "primaryRole" to primaryRole.name,
+                        "assignedBranchIds" to listOf("branch_main"),
+                        "assignedClasses" to assignedClasses.distinct().take(30),
+                        "assignedSubjects" to assignedSubjects.distinct().take(30),
+                        "linkedStudentIds" to linkedStudentIds.distinct().take(20),
+                        "extraPermissions" to extraPermissions.distinct().take(45),
+                        "active" to true,
+                        "updatedBy" to actorName.take(100),
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            appendAuditLog(
+                schoolId, uid, actorName, actorRole.name,
+                "USER_ACCESS_PROVISIONED", "ICT_SYSTEMS",
+                "Provisioned ${primaryRole.shortTitle} access for $fullName with ${extraPermissions.size} extra permissions",
+                false
+            )
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, path)
+            Result.failure(e)
+        }
+    }
+
     suspend fun createSchool(
         name: String,
         code: String,
         city: String,
         country: String,
-        actorName: String
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<String> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         return try {
+            requireActorCapability(actorRole, RoleCapability.CREATE_SCHOOL_TENANT, actorExtra, "provision new schools")
             require(name.trim().length in 2..120) { "School name must be 2–120 characters." }
             require(code.trim().length in 2..24) { "School code must be 2–24 characters." }
             val docRef = db.collection("schools").document()
@@ -216,7 +391,7 @@ class GsmsRepository(private val db: FirebaseFirestore) {
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-            appendAuditLog(docRef.id, uid, actorName, PortalRole.SUPER_ADMIN.name, "SCHOOL_CREATED", "SYSTEM", "Created school tenant $name", false)
+            appendAuditLog(docRef.id, uid, actorName, actorRole.name, "SCHOOL_CREATED", "SYSTEM", "Created school tenant $name", false)
             Result.success(docRef.id)
         } catch (e: CancellationException) {
             throw e
@@ -226,19 +401,58 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         }
     }
 
+    suspend fun createBranch(
+        schoolId: String,
+        name: String,
+        code: String,
+        city: String,
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
+    ): Result<Unit> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
+        val path = "schools/$schoolId/branches"
+        return try {
+            requireActorCapability(actorRole, RoleCapability.MANAGE_BRANCHES, actorExtra, "create campus branches")
+            require(name.trim().length in 2..100) { "Branch name must be 2–100 characters." }
+            require(code.trim().length in 2..24) { "Branch code must be 2–24 characters." }
+            db.collection("schools").document(schoolId).collection("branches").document().set(
+                mapOf(
+                    "schoolId" to schoolId,
+                    "ownerId" to uid,
+                    "name" to name.trim(),
+                    "code" to code.trim().uppercase(),
+                    "city" to city.trim().ifBlank { "Campus City" },
+                    "mainCampus" to false,
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+            appendAuditLog(schoolId, uid, actorName, actorRole.name, "BRANCH_CREATED", "SYSTEM", "Added campus branch $name ($code)", false)
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, path)
+            Result.failure(e)
+        }
+    }
+
     suspend fun toggleSchoolModule(
         school: School,
         module: GsmsModule,
         actorName: String,
-        actorRole: PortalRole
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/${school.id}"
         return try {
+            requireActorCapability(actorRole, RoleCapability.MANAGE_MODULES, actorExtra, "toggle school modules")
             val updatedModules = if (school.enabledModules.contains(module.name)) {
                 school.enabledModules.filterNot { it == module.name }
             } else {
-                (school.enabledModules + module.name).take(25)
+                (school.enabledModules + module.name).take(30)
             }
             db.collection("schools").document(school.id).update(
                 mapOf(
@@ -270,10 +484,13 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         schoolId: String,
         academicYear: String,
         term: String,
-        actorName: String
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         return try {
+            requireActorCapability(actorRole, RoleCapability.UPDATE_ACADEMIC_PERIOD, actorExtra, "update academic period")
             db.collection("schools").document(schoolId).update(
                 mapOf(
                     "activeAcademicYear" to academicYear.trim(),
@@ -281,7 +498,7 @@ class GsmsRepository(private val db: FirebaseFirestore) {
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-            appendAuditLog(schoolId, uid, actorName, PortalRole.SCHOOL_ADMIN.name, "ACADEMIC_PERIOD_UPDATED", "ACADEMICS", "Set active period to $academicYear ($term)", false)
+            appendAuditLog(schoolId, uid, actorName, actorRole.name, "ACADEMIC_PERIOD_UPDATED", "ACADEMICS", "Set active period to $academicYear ($term)", false)
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -300,11 +517,14 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         fullName: String,
         className: String,
         parentName: String,
-        actorName: String
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/${school.id}/students"
         return try {
+            requireActorCapability(actorRole, RoleCapability.ENROLL_STUDENT, actorExtra, "enroll students")
             require(fullName.trim().length in 2..100) { "Student name must be 2–100 characters." }
             require(admissionNo.trim().length in 2..32) { "Admission number must be 2–32 characters." }
             db.collection("schools").document(school.id).collection("students").document().set(
@@ -332,7 +552,7 @@ class GsmsRepository(private val db: FirebaseFirestore) {
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-            appendAuditLog(school.id, uid, actorName, PortalRole.ADMISSIONS_RECEPTION.name, "STUDENT_ADMITTED", "ADMISSIONS", "Enrolled $fullName ($admissionNo)", false)
+            appendAuditLog(school.id, uid, actorName, actorRole.name, "STUDENT_ADMITTED", "ADMISSIONS", "Enrolled $fullName ($admissionNo)", false)
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -348,11 +568,14 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         targetName: String,
         className: String,
         status: String,
-        actorName: String
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/${school.id}/attendance"
         return try {
+            requireActorCapability(actorRole, RoleCapability.MARK_ATTENDANCE, actorExtra, "mark attendance")
             db.collection("schools").document(school.id).collection("attendance").document().set(
                 mapOf(
                     "schoolId" to school.id,
@@ -369,7 +592,7 @@ class GsmsRepository(private val db: FirebaseFirestore) {
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-            appendAuditLog(school.id, uid, actorName, PortalRole.TEACHER.name, "ATTENDANCE_MARKED", "ATTENDANCE", "Marked $targetName as $status", false)
+            appendAuditLog(school.id, uid, actorName, actorRole.name, "ATTENDANCE_MARKED", "ATTENDANCE", "Marked $targetName as $status", false)
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -388,11 +611,14 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         subjectName: String,
         teacherName: String,
         scheduleSlot: String,
-        score: Double
+        score: Double,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/${school.id}/academics"
         return try {
+            requireActorCapability(actorRole, RoleCapability.EDIT_ACADEMICS, actorExtra, "add academic entries")
             require(title.trim().length in 1..140) { "Title is required." }
             val grade = when {
                 score >= 90 -> "A"
@@ -438,11 +664,14 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         classLevel: String,
         sections: List<String>,
         gradingScale: String,
-        actorName: String
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/${school.id}/report_templates"
         return try {
+            requireActorCapability(actorRole, RoleCapability.MANAGE_REPORT_TEMPLATES, actorExtra, "create report templates")
             require(name.trim().length in 2..100) { "Template name must be 2–100 characters." }
             db.collection("schools").document(school.id).collection("report_templates").document().set(
                 mapOf(
@@ -457,7 +686,7 @@ class GsmsRepository(private val db: FirebaseFirestore) {
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
-            appendAuditLog(school.id, uid, actorName, PortalRole.SCHOOL_ADMIN.name, "TEMPLATE_CREATED", "REPORT_CARDS", "Uploaded template $name", false)
+            appendAuditLog(school.id, uid, actorName, actorRole.name, "TEMPLATE_CREATED", "REPORT_CARDS", "Uploaded template $name", false)
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -477,11 +706,14 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         teacherRemarks: String,
         aiSummary: String?,
         submitNow: Boolean,
-        actorName: String
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/${school.id}/report_cards"
         return try {
+            requireActorCapability(actorRole, RoleCapability.FILL_SUBMIT_REPORT_CARDS, actorExtra, "fill or submit report cards")
             val status = if (submitNow) ReportStatus.SUBMITTED.name else ReportStatus.DRAFT.name
             val payload = mutableMapOf<String, Any>(
                 "schoolId" to school.id,
@@ -511,7 +743,7 @@ class GsmsRepository(private val db: FirebaseFirestore) {
                 school.id,
                 uid,
                 actorName,
-                PortalRole.TEACHER.name,
+                actorRole.name,
                 if (submitNow) "REPORT_SUBMITTED" else "REPORT_SAVED",
                 "REPORT_CARDS",
                 "${if (submitNow) "Submitted" else "Saved draft"} report card for ${student.fullName} (v1)",
@@ -532,11 +764,18 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         nextStatus: ReportStatus,
         headteacherRemarks: String?,
         reviewerName: String,
-        reviewerRole: PortalRole
+        reviewerRole: PortalRole,
+        reviewerExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/$schoolId/report_cards/${report.id}"
         return try {
+            val required = if (nextStatus == ReportStatus.SUBMITTED) {
+                RoleCapability.FILL_SUBMIT_REPORT_CARDS
+            } else {
+                RoleCapability.APPROVE_PUBLISH_REPORT_CARDS
+            }
+            requireActorCapability(reviewerRole, required, reviewerExtra, "move report cards to ${nextStatus.label}")
             val updates = mutableMapOf<String, Any>(
                 "status" to nextStatus.name,
                 "version" to (report.version + 1L),
@@ -579,11 +818,14 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         daysCount: Long,
         reason: String,
         aiConflictNote: String?,
-        actorName: String
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/${school.id}/leave_requests"
         return try {
+            requireActorCapability(actorRole, RoleCapability.APPLY_LEAVE, actorExtra, "apply for leave")
             require(reason.trim().length in 2..500) { "Please provide a leave reason (2–500 chars)." }
             val payload = mutableMapOf<String, Any>(
                 "schoolId" to school.id,
@@ -605,7 +847,7 @@ class GsmsRepository(private val db: FirebaseFirestore) {
                 payload["aiConflictNote"] = aiConflictNote.trim().take(600)
             }
             db.collection("schools").document(school.id).collection("leave_requests").document().set(payload).await()
-            appendAuditLog(school.id, uid, actorName, PortalRole.TEACHER.name, "LEAVE_APPLIED", "LEAVE_MANAGEMENT", "${staff.fullName} requested $daysCount day(s) $leaveType leave", !aiConflictNote.isNullOrBlank())
+            appendAuditLog(school.id, uid, actorName, actorRole.name, "LEAVE_APPLIED", "LEAVE_MANAGEMENT", "${staff.fullName} requested $daysCount day(s) $leaveType leave", !aiConflictNote.isNullOrBlank())
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -621,11 +863,13 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         staffMember: StaffMember?,
         approve: Boolean,
         reviewerName: String,
-        reviewerRole: PortalRole
+        reviewerRole: PortalRole,
+        reviewerExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/$schoolId/leave_requests/${leave.id}"
         return try {
+            requireActorCapability(reviewerRole, RoleCapability.APPROVE_LEAVE, reviewerExtra, "approve or reject leave requests")
             val nextStatus = if (approve) LeaveStatus.APPROVED else LeaveStatus.REJECTED
             val batch = db.batch()
             val leaveRef = db.collection("schools").document(schoolId)
@@ -679,11 +923,14 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         schoolId: String,
         entry: FinanceEntry,
         additionalPaymentUsd: Double,
-        actorName: String
+        actorName: String,
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/$schoolId/finance/${entry.id}"
         return try {
+            requireActorCapability(actorRole, RoleCapability.RECORD_FINANCE_PAYMENT, actorExtra, "record fee payments")
             val newPaid = (entry.paidUsd + additionalPaymentUsd).coerceAtMost(entry.amountUsd)
             val nextStatus = if (newPaid >= entry.amountUsd) "PAID" else "PARTIAL"
             db.collection("schools").document(schoolId).collection("finance").document(entry.id)
@@ -694,7 +941,7 @@ class GsmsRepository(private val db: FirebaseFirestore) {
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 ).await()
-            appendAuditLog(schoolId, uid, actorName, PortalRole.FINANCE_OFFICER.name, "PAYMENT_RECORDED", "FINANCE", "Recorded USD ${"%.2f".format(additionalPaymentUsd)} for ${entry.referenceNo}", false)
+            appendAuditLog(schoolId, uid, actorName, actorRole.name, "PAYMENT_RECORDED", "FINANCE", "Recorded USD ${"%.2f".format(additionalPaymentUsd)} for ${entry.referenceNo}", false)
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -713,11 +960,13 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         body: String,
         senderName: String,
         senderRole: PortalRole,
+        senderExtra: Set<RoleCapability>,
         aiDrafted: Boolean
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/${school.id}/communications"
         return try {
+            requireActorCapability(senderRole, RoleCapability.COMPOSE_COMMUNICATIONS, senderExtra, "compose communications")
             require(title.trim().length in 1..140) { "Message title required." }
             require(body.trim().length in 1..2000) { "Message body required." }
             db.collection("schools").document(school.id).collection("communications").document().set(
@@ -757,11 +1006,36 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         metricLabel: String,
         notes: String,
         actorName: String,
-        actorRole: PortalRole
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/${school.id}/operations"
         return try {
+            val sectionName = when (moduleType) {
+                "LIBRARY_BOOK", "LIBRARY_BORROW" -> "Library"
+                "VEHICLE", "ROUTE", "TRIP" -> "Transport"
+                "WELFARE" -> "Welfare"
+                "COUNSELLING" -> "Counselling"
+                "DISCIPLINE" -> "Discipline"
+                "PROCUREMENT" -> "Procurement"
+                "INVENTORY", "ASSET", "STOCK_MOVEMENT" -> "Stores"
+                "HOSTEL" -> "Hostel"
+                "FRONT_DESK" -> "Front Desk"
+                "ADMISSION" -> "Admissions"
+                "ICT_TICKET" -> "ICT Systems"
+                else -> "Events"
+            }
+            val allowedBySection = sectionName in RolePolicy.operationSections(actorRole, school, actorExtra)
+            val hasEditCap = actorRole.has(RoleCapability.EDIT_OPERATIONS, actorExtra) ||
+                actorRole.has(RoleCapability.MANAGE_PROCUREMENT, actorExtra) ||
+                actorRole.has(RoleCapability.MANAGE_STORES, actorExtra) ||
+                actorRole.has(RoleCapability.MANAGE_COUNSELLING, actorExtra) ||
+                actorRole.has(RoleCapability.MANAGE_FRONT_DESK, actorExtra) ||
+                actorRole.has(RoleCapability.MANAGE_ICT_SYSTEMS, actorExtra)
+            if (!allowedBySection || !hasEditCap) {
+                throw SecurityException("RBAC denied: ${actorRole.shortTitle} cannot add records in $sectionName.")
+            }
             require(title.trim().length in 1..140) { "Title required." }
             db.collection("schools").document(school.id).collection("operations").document().set(
                 mapOf(
@@ -794,11 +1068,13 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         alert: EarlyWarningAlert,
         newStatus: String,
         actorName: String,
-        actorRole: PortalRole
+        actorRole: PortalRole,
+        actorExtra: Set<RoleCapability>
     ): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not signed in"))
         val path = "schools/$schoolId/alerts/${alert.id}"
         return try {
+            requireActorCapability(actorRole, RoleCapability.MANAGE_ALERTS, actorExtra, "update early-warning alerts")
             db.collection("schools").document(schoolId).collection("alerts").document(alert.id)
                 .update(
                     mapOf(

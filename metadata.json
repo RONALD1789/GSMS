@@ -1,6 +1,6 @@
 {
   "name": "GSMS",
-  "description": "Global School Management System — Multi-tenant AI-powered school ERP with 12 role-based portals, module registry, report approvals, leave workflows, analytics, and Gemini AI tools.",
+  "description": "Global School Management System — Multi-tenant AI-powered school ERP with 19 independent role-based portals, strict multi-layer RBAC, permission delegation, module registry, report approvals, leave workflows, analytics, and Gemini AI tools.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -24,9 +24,16 @@ object GsmsSeedData {
         val userPayload = mutableMapOf<String, Any>(
             "userId" to uid,
             "displayName" to displayName.ifBlank { "GSMS Executive" }.take(80),
+            "primaryRole" to PortalRole.SUPER_ADMIN.name,
             "activeSchoolId" to mainSchoolId,
             "activeBranchId" to "branch_main",
             "activeRole" to PortalRole.SCHOOL_ADMIN.name,
+            "assignedSchoolId" to mainSchoolId,
+            "assignedBranchIds" to listOf("branch_main", "branch_north"),
+            "assignedClasses" to listOf("Grade 10A"),
+            "assignedSubjects" to listOf("Mathematics", "Physics"),
+            "linkedStudentIds" to listOf("stu_1"),
+            "extraPermissions" to emptyList<String>(),
             "lowDataMode" to false,
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
@@ -116,6 +123,150 @@ object GsmsSeedData {
         seedSecondarySchoolBasics(db, uid, thirdSchoolId, "Pacific Crest Preparatory", "Singapore")
     }
 
+    suspend fun seedAccessAssignmentsForSchool(
+        db: FirebaseFirestore,
+        uid: String,
+        schoolId: String
+    ) {
+        val batch = db.batch()
+        val schoolRef = db.collection("schools").document(schoolId)
+        val assignments = listOf(
+            mapOf(
+                "id" to "assign_teacher_kamau",
+                "fullName" to "Dr. Samuel Kamau",
+                "email" to "kamau@oakridge.edu",
+                "primaryRole" to PortalRole.TEACHER.name,
+                "assignedBranchIds" to listOf("branch_main"),
+                "assignedClasses" to listOf("Grade 10A"),
+                "assignedSubjects" to listOf("Mathematics", "Physics"),
+                "linkedStudentIds" to emptyList<String>(),
+                "extraPermissions" to emptyList<String>()
+            ),
+            mapOf(
+                "id" to "assign_class_teacher_priya",
+                "fullName" to "Priya Nair",
+                "email" to "priya.nair@oakridge.edu",
+                "primaryRole" to PortalRole.CLASS_TEACHER.name,
+                "assignedBranchIds" to listOf("branch_main"),
+                "assignedClasses" to listOf("Grade 10A", "Grade 9C"),
+                "assignedSubjects" to listOf("English"),
+                "linkedStudentIds" to emptyList<String>(),
+                "extraPermissions" to emptyList<String>()
+            ),
+            mapOf(
+                "id" to "assign_deputy_head",
+                "fullName" to "Dr. Miriam Mensah",
+                "email" to "deputy@oakridge.edu",
+                "primaryRole" to PortalRole.DEPUTY_HEADTEACHER.name,
+                "assignedBranchIds" to listOf("branch_main", "branch_north"),
+                "assignedClasses" to emptyList<String>(),
+                "assignedSubjects" to emptyList<String>(),
+                "linkedStudentIds" to emptyList<String>(),
+                "extraPermissions" to emptyList<String>()
+            ),
+            mapOf(
+                "id" to "assign_exam_officer",
+                "fullName" to "Prof. Arthur Pendelton",
+                "email" to "exams@oakridge.edu",
+                "primaryRole" to PortalRole.EXAMINATION_OFFICER.name,
+                "assignedBranchIds" to listOf("branch_main"),
+                "assignedClasses" to emptyList<String>(),
+                "assignedSubjects" to emptyList<String>(),
+                "linkedStudentIds" to emptyList<String>(),
+                "extraPermissions" to emptyList<String>()
+            ),
+            mapOf(
+                "id" to "assign_parent_wei",
+                "fullName" to "Wei Lin (Guardian)",
+                "email" to "wei.lin@family.org",
+                "primaryRole" to PortalRole.PARENT.name,
+                "assignedBranchIds" to listOf("branch_main"),
+                "assignedClasses" to emptyList<String>(),
+                "assignedSubjects" to emptyList<String>(),
+                "linkedStudentIds" to listOf("stu_1"),
+                "extraPermissions" to emptyList<String>()
+            ),
+            mapOf(
+                "id" to "assign_student_maya",
+                "fullName" to "Maya Lin (Learner)",
+                "email" to "maya.lin@oakridge.edu",
+                "primaryRole" to PortalRole.STUDENT.name,
+                "assignedBranchIds" to listOf("branch_main"),
+                "assignedClasses" to listOf("Grade 10A"),
+                "assignedSubjects" to emptyList<String>(),
+                "linkedStudentIds" to listOf("stu_1"),
+                "extraPermissions" to emptyList<String>()
+            ),
+            mapOf(
+                "id" to "assign_procurement",
+                "fullName" to "Kofi Boateng",
+                "email" to "procurement@oakridge.edu",
+                "primaryRole" to PortalRole.PROCUREMENT_OFFICER.name,
+                "assignedBranchIds" to listOf("branch_main"),
+                "assignedClasses" to emptyList<String>(),
+                "assignedSubjects" to emptyList<String>(),
+                "linkedStudentIds" to emptyList<String>(),
+                "extraPermissions" to emptyList<String>()
+            ),
+            mapOf(
+                "id" to "assign_storekeeper",
+                "fullName" to "James Osei",
+                "email" to "stores@oakridge.edu",
+                "primaryRole" to PortalRole.STOREKEEPER.name,
+                "assignedBranchIds" to listOf("branch_main"),
+                "assignedClasses" to emptyList<String>(),
+                "assignedSubjects" to emptyList<String>(),
+                "linkedStudentIds" to emptyList<String>(),
+                "extraPermissions" to emptyList<String>()
+            ),
+            mapOf(
+                "id" to "assign_counsellor",
+                "fullName" to "Dr. Nadia Hassan",
+                "email" to "counsellor@oakridge.edu",
+                "primaryRole" to PortalRole.SCHOOL_COUNSELLOR.name,
+                "assignedBranchIds" to listOf("branch_main"),
+                "assignedClasses" to emptyList<String>(),
+                "assignedSubjects" to emptyList<String>(),
+                "linkedStudentIds" to emptyList<String>(),
+                "extraPermissions" to emptyList<String>()
+            ),
+            mapOf(
+                "id" to "assign_ict",
+                "fullName" to "Victor Chen",
+                "email" to "ict.admin@oakridge.edu",
+                "primaryRole" to PortalRole.ICT_ADMIN.name,
+                "assignedBranchIds" to listOf("branch_main", "branch_north"),
+                "assignedClasses" to emptyList<String>(),
+                "assignedSubjects" to emptyList<String>(),
+                "linkedStudentIds" to emptyList<String>(),
+                "extraPermissions" to emptyList<String>()
+            )
+        )
+        assignments.forEach { a ->
+            val docId = a["id"] as String
+            batch.set(
+                schoolRef.collection("access_assignments").document(docId),
+                mapOf(
+                    "schoolId" to schoolId,
+                    "ownerId" to uid,
+                    "fullName" to a["fullName"]!!,
+                    "email" to a["email"]!!,
+                    "primaryRole" to a["primaryRole"]!!,
+                    "assignedBranchIds" to a["assignedBranchIds"]!!,
+                    "assignedClasses" to a["assignedClasses"]!!,
+                    "assignedSubjects" to a["assignedSubjects"]!!,
+                    "linkedStudentIds" to a["linkedStudentIds"]!!,
+                    "extraPermissions" to a["extraPermissions"]!!,
+                    "active" to true,
+                    "updatedBy" to "GSMS Provisioning Engine",
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            )
+        }
+        batch.commit().await()
+    }
+
     private suspend fun seedSchoolSubcollections(
         db: FirebaseFirestore,
         uid: String,
@@ -184,7 +335,9 @@ object GsmsSeedData {
             listOf("stf_2", "STF-02", "Elena Rostova", "Senior Physics Teacher", "STEM", "Grade 10A & 11B Physics", 16L, 5L, true, 22L),
             listOf("stf_3", "STF-03", "Priya Nair", "English & Literature Lead", "Humanities", "Grade 9C & 10A English", 21L, 0L, false, 20L),
             listOf("stf_4", "STF-04", "David Vance", "Principal / Headteacher", "Leadership", "Academic Governance", 20L, 1L, false, 30L),
-            listOf("stf_5", "STF-05", "Nurse Grace Okello", "Lead School Nurse", "Welfare", "Campus Health Clinic", 19L, 2L, false, 35L)
+            listOf("stf_5", "STF-05", "Nurse Grace Okello", "Lead School Nurse", "Welfare", "Campus Health Clinic", 19L, 2L, false, 35L),
+            listOf("stf_6", "STF-06", "Dr. Miriam Mensah", "Deputy Headteacher", "Leadership", "Curriculum & Discipline", 21L, 0L, false, 28L),
+            listOf("stf_7", "STF-07", "Victor Chen", "ICT Administrator", "ICT Systems", "RBAC, Network & Smart Labs", 20L, 1L, false, 32L)
         )
         staffList.forEach { st ->
             batch.set(
@@ -208,13 +361,15 @@ object GsmsSeedData {
             )
         }
 
-        // Academic records (timetables, exams, marks)
+        // Academic records (timetables, exams, marks across multiple classes)
         val academics = listOf(
             listOf("acad_1", "TIMETABLE", "Advanced Calculus Period 1", "Grade 10A", "Mathematics", "Dr. Samuel Kamau", "Mon 08:30 - 09:30", 0.0, 100.0, "-"),
             listOf("acad_2", "TIMETABLE", "Quantum & Mechanics Lab", "Grade 10A", "Physics", "Elena Rostova", "Mon 10:00 - 11:30", 0.0, 100.0, "-"),
             listOf("acad_3", "EXAM", "Term 1 Mid-Term STEM Mock", "Grade 10A", "Mathematics", "Dr. Samuel Kamau", "2026-11-28 09:00", 88.5, 100.0, "A-"),
             listOf("acad_4", "MARK", "Maya Lin • Mathematics Mid-Term", "Grade 10A", "Mathematics", "Dr. Samuel Kamau", "Graded", 94.0, 100.0, "A"),
-            listOf("acad_5", "MARK", "Liam O'Connor • Physics Lab", "Grade 10A", "Physics", "Elena Rostova", "Graded", 58.0, 100.0, "C-")
+            listOf("acad_5", "MARK", "Liam O'Connor • Physics Lab", "Grade 10A", "Physics", "Elena Rostova", "Graded", 58.0, 100.0, "C-"),
+            listOf("acad_6", "EXAM", "World Literature Essay Assessment", "Grade 11B", "English", "Priya Nair", "2026-11-30 11:00", 86.0, 100.0, "B+"),
+            listOf("acad_7", "TIMETABLE", "Cell Biology & Genetics", "Grade 11B", "Biology", "Dr. Miriam Mensah", "Tue 09:00 - 10:30", 0.0, 100.0, "-")
         )
         academics.forEach { ac ->
             batch.set(
@@ -242,13 +397,13 @@ object GsmsSeedData {
 
         // Attendance
         listOf(
-            Triple("att_1", "Maya Lin", "PRESENT"),
-            Triple("att_2", "Liam O'Connor", "ABSENT"),
-            Triple("att_3", "Amina Yusuf", "PRESENT"),
-            Triple("att_4", "Mateo Silva", "LATE")
-        ).forEach { (id, name, status) ->
+            listOf("att_1", "Maya Lin", "Grade 10A", "PRESENT"),
+            listOf("att_2", "Liam O'Connor", "Grade 10A", "ABSENT"),
+            listOf("att_3", "Amina Yusuf", "Grade 11B", "PRESENT"),
+            listOf("att_4", "Mateo Silva", "Grade 9C", "LATE")
+        ).forEach { att ->
             batch.set(
-                schoolRef.collection("attendance").document(id),
+                schoolRef.collection("attendance").document(att[0]),
                 mapOf(
                     "schoolId" to schoolId,
                     "branchId" to "branch_main",
@@ -256,10 +411,10 @@ object GsmsSeedData {
                     "term" to "Term 1",
                     "ownerId" to uid,
                     "targetType" to "STUDENT",
-                    "targetName" to name,
-                    "className" to "Grade 10A",
+                    "targetName" to att[1],
+                    "className" to att[2],
                     "dateIso" to "2026-11-21",
-                    "status" to status,
+                    "status" to att[3],
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
@@ -282,7 +437,7 @@ object GsmsSeedData {
             )
         )
 
-        // Report cards across workflow statuses
+        // Report cards across workflow statuses & classes
         batch.set(
             schoolRef.collection("report_cards").document("rc_maya"),
             mapOf(
@@ -329,6 +484,29 @@ object GsmsSeedData {
                 "status" to "SUBMITTED",
                 "version" to 1L,
                 "submittedBy" to "Dr. Samuel Kamau",
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        )
+        batch.set(
+            schoolRef.collection("report_cards").document("rc_amina"),
+            mapOf(
+                "schoolId" to schoolId,
+                "branchId" to "branch_main",
+                "academicYear" to "2026/2027",
+                "term" to "Term 1",
+                "ownerId" to uid,
+                "studentId" to "stu_3",
+                "studentName" to "Amina Yusuf",
+                "className" to "Grade 11B",
+                "templateId" to "tpl_senior",
+                "templateName" to "Senior Secondary Term Report",
+                "subjectGradesSummary" to "English: 89 (A-), Biology: 86 (B+), History: 85 (B)",
+                "averageScore" to 86.7,
+                "teacherRemarks" to "Thoughtful seminar leadership and analytical writing.",
+                "status" to "DRAFT",
+                "version" to 1L,
+                "submittedBy" to "Priya Nair",
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
@@ -426,7 +604,7 @@ object GsmsSeedData {
             )
         )
 
-        // Operations (Library, Transport, Welfare, Discipline, Inventory, Hostel, Admissions, Events)
+        // Operations (All campus & specialized departments)
         val operations = listOf(
             listOf("op_lib1", "LIBRARY_BOOK", "Linear Algebra Done Right", "Sheldon Axler • STEM Shelf B2", "Library Catalog", "AVAILABLE", "12 Copies", "High demand for Grade 12 IB"),
             listOf("op_lib2", "LIBRARY_BORROW", "Quantum Physics Primer (Overdue)", "Borrower: Liam O'Connor", "Liam O'Connor", "OVERDUE", "4 Days Late", "Auto reminder queued"),
@@ -437,7 +615,13 @@ object GsmsSeedData {
             listOf("op_inv1", "ASSET", "Smart Interactive Boards (x24)", "North STEM Wing Classrooms", "IT & Facilities", "OPERATIONAL", "$38,400 Value", "Annual warranty active"),
             listOf("op_hos1", "HOSTEL", "Falcon Boarding House", "Occupancy: 118 / 120 Beds", "Matron Hannah Reid", "ACTIVE", "98% Full", "Weekend curfew audit clean"),
             listOf("op_adm1", "ADMISSION", "Inquiry: Sophia Chen (Grade 9)", "Transfer from Zurich Int'l", "Admissions Desk", "INTERVIEW", "91% Likelihood", "Transcripts & passport verified"),
-            listOf("op_evt1", "EVENT", "Annual Global STEM Fair 2026", "Dec 12 • Main Glass Atrium", "Events Committee", "SCHEDULED", "420 RSVPs", "Live parent stream enabled")
+            listOf("op_evt1", "EVENT", "Annual Global STEM Fair 2026", "Dec 12 • Main Glass Atrium", "Events Committee", "SCHEDULED", "420 RSVPs", "Live parent stream enabled"),
+            listOf("op_proc1", "PROCUREMENT", "PO-2026-88: Optics Lab Microscopes", "Vendor: OptiLab UK • 20 Units", "Kofi Boateng", "RFQ_APPROVED", "$6,400 PO", "3 vendor quotes compared; 14% savings"),
+            listOf("op_proc2", "PROCUREMENT", "RFQ-2026-91: Exam Stationery Batch", "Vendor: Civic Paper Ltd • 500 Reams", "Kofi Boateng", "PENDING_PO", "$1,850 Est.", "Awaiting storekeeper stock verification"),
+            listOf("op_store1", "STOCK_MOVEMENT", "Chemistry Titration Kits Reorder", "Central Storeroom Aisle 4", "James Osei", "LOW_STOCK", "8 Packs Left", "Below reorder threshold of 15 packs"),
+            listOf("op_couns1", "COUNSELLING", "Pastoral Check-In: Liam O'Connor", "Academic stress & attendance coaching", "Dr. Nadia Hassan", "IN_PROGRESS", "Session 2/4", "Parent conference scheduled Friday"),
+            listOf("op_desk1", "FRONT_DESK", "Visitor Pass #V-402: Cambridge Inspector", "Main Reception Gate A", "Front Desk Team", "CHECKED_IN", "Badge Issued", "Escorted to Principal Conference Room"),
+            listOf("op_ict1", "ICT_TICKET", "RBAC & SSO Audit • North Wing Wi-Fi", "Core Switch Rack B", "Victor Chen", "ACTIVE", "99.94% Uptime", "256-bit TLS & App Check enforced")
         )
         operations.forEach { op ->
             batch.set(
@@ -463,7 +647,8 @@ object GsmsSeedData {
         val alerts = listOf(
             listOf("alt_1", "ACADEMIC", "HIGH", "Liam O'Connor", "Physics score dropped 14% alongside 74% attendance.", "Assign peer math/physics tutor & notify parent Claire O'Connor.", "HEADTEACHER", "OPEN"),
             listOf("alt_2", "FINANCE", "CRITICAL", "Invoice INV-2026-102", "Balance $1,450 overdue by 21 days.", "Send staggered installment reminder via Finance Portal.", "FINANCE_OFFICER", "OPEN"),
-            listOf("alt_3", "STAFFING", "MEDIUM", "Humanities Department", "Pending leave request lv_2 overlaps 2 Grade 10A workshops.", "Assign substitute teacher before approving leave.", "HR_MANAGER", "IN_PROGRESS")
+            listOf("alt_3", "STAFFING", "MEDIUM", "Humanities Department", "Pending leave request lv_2 overlaps 2 Grade 10A workshops.", "Assign substitute teacher before approving leave.", "HR_MANAGER", "IN_PROGRESS"),
+            listOf("alt_4", "ICT", "MEDIUM", "North Wing Smart Lab", "2 interactive boards require firmware patch before exams.", "Deploy remote MDM patch tonight.", "ICT_ADMIN", "OPEN")
         )
         alerts.forEach { al ->
             batch.set(
@@ -495,13 +680,14 @@ object GsmsSeedData {
                 "actorRole" to "SUPER_ADMIN",
                 "actionType" to "TENANT_INITIALIZED",
                 "moduleName" to "SYSTEM",
-                "summary" to "Provisioned multi-tenant workspace for $schoolName with 19 modules.",
+                "summary" to "Provisioned multi-tenant workspace for $schoolName with 19 portals & RBAC.",
                 "aiAction" to false,
                 "createdAt" to FieldValue.serverTimestamp()
             )
         )
 
         batch.commit().await()
+        seedAccessAssignmentsForSchool(db, uid, schoolId)
     }
 
     private suspend fun seedSecondarySchoolBasics(

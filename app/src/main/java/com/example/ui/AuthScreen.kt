@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -24,6 +25,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
@@ -31,9 +36,12 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.example.R
+import com.example.data.supabase.SupabaseSyncRepository
 import com.example.ui.theme.EmeraldBright
+import com.example.ui.theme.EmeraldTeal
 import com.example.ui.theme.OxfordNavy
 import com.example.ui.theme.OxfordNavyDark
+import com.example.ui.theme.WarmAmber
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -54,7 +62,7 @@ fun attemptAutoSignIn(
     onUnauthenticated: () -> Unit,
     scope: CoroutineScope
 ) {
-    if (Firebase.auth.currentUser != null) {
+    if (Firebase.auth.currentUser != null || SupabaseSyncRepository.shared.sessionFlow.value != null) {
         onAuthSuccess()
         return
     }
@@ -151,6 +159,7 @@ fun performSignOut(
 
 @Composable
 fun AuthScreen(
+    supabaseRepository: SupabaseSyncRepository = SupabaseSyncRepository.shared,
     onAuthSuccess: () -> Unit
 ) {
     val context = LocalContext.current
@@ -160,6 +169,13 @@ fun AuthScreen(
     var isLoading by remember { mutableStateOf(false) }
     var autoChecking by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var infoMessage by remember { mutableStateOf<String?>(null) }
+
+    var isCreateAccount by remember { mutableStateOf(false) }
+    var fullName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(450L)
@@ -194,7 +210,7 @@ fun AuthScreen(
                 modifier = Modifier
                     .widthIn(max = 600.dp)
                     .fillMaxWidth()
-                    .height(230.dp)
+                    .height(200.dp)
                     .clip(RoundedCornerShape(26.dp))
             ) {
                 Image(
@@ -218,7 +234,7 @@ fun AuthScreen(
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(22.dp)
+                        .padding(20.dp)
                 ) {
                     Surface(
                         color = EmeraldBright.copy(alpha = 0.2f),
@@ -234,19 +250,19 @@ fun AuthScreen(
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = "Global School Management System",
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.headlineSmall,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "12 Role Portals • 19 Modular Engines • Gemini AI Layer",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "19 Role Portals • 21 Modular Engines • Gemini AI Layer",
+                        style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.85f)
                     )
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(18.dp))
 
             Column(
                 modifier = Modifier
@@ -254,52 +270,280 @@ fun AuthScreen(
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                AuthFeatureRow(
-                    icon = Icons.Rounded.Domain,
-                    title = "Multi-School & Branch Tenancy",
-                    subtitle = "Strict tenant isolation with academic years, terms, and white-label module toggles."
-                )
-                AuthFeatureRow(
-                    icon = Icons.Rounded.AutoAwesome,
-                    title = "Role-Scoped Gemini AI Copilot",
-                    subtitle = "Lesson plans, report summaries, early-warning risk detection, and route optimization."
-                )
-                AuthFeatureRow(
-                    icon = Icons.Rounded.VerifiedUser,
-                    title = "End-to-End Approvals & PDF Reports",
-                    subtitle = "Report card template governance, leave balance automation, and immutable audit logs."
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                if (errorMessage != null) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
+                // Primary Email & Password Authentication Card (Supabase GoTrue Auth)
+                ElevatedCard(
+                    shape = RoundedCornerShape(22.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(14.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                Icons.Rounded.ErrorOutline,
-                                contentDescription = "Sign-in error",
-                                tint = MaterialTheme.colorScheme.error
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isCreateAccount) "Create Email Account" else "Sign in with Email",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Access your assigned school portal via verified email",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            StatusPill(
+                                text = if (supabaseRepository.isConfigured) "EMAIL READY" else "SETUP NEEDED",
+                                color = if (supabaseRepository.isConfigured) EmeraldTeal else WarmAmber
                             )
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                text = errorMessage!!,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = !isCreateAccount,
+                                onClick = {
+                                    isCreateAccount = false
+                                    errorMessage = null
+                                    infoMessage = null
+                                },
+                                label = { Text("Sign In") },
+                                modifier = Modifier.testTag("auth_mode_signin")
                             )
+                            FilterChip(
+                                selected = isCreateAccount,
+                                onClick = {
+                                    isCreateAccount = true
+                                    errorMessage = null
+                                    infoMessage = null
+                                },
+                                label = { Text("Create Account") },
+                                modifier = Modifier.testTag("auth_mode_signup")
+                            )
+                        }
+
+                        if (!supabaseRepository.isConfigured) {
+                            Surface(
+                                color = WarmAmber.copy(alpha = 0.14f),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Add SUPABASE_URL & SUPABASE_ANON_KEY in AI Studio Secrets (and run supabase/schema.sql) to enable Email Login, or continue with Google below.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                        }
+
+                        if (isCreateAccount) {
+                            OutlinedTextField(
+                                value = fullName,
+                                onValueChange = { fullName = it },
+                                label = { Text("Full Name") },
+                                leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("auth_fullname_input")
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = email,
+                            onValueChange = { email = it },
+                            label = { Text("School / Work Email") },
+                            placeholder = { Text("name@school.edu") },
+                            leadingIcon = { Icon(Icons.Rounded.Email, contentDescription = null) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                imeAction = ImeAction.Next
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("email_input")
+                        )
+
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text("Password (min 6 characters)") },
+                            leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                        contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                                    )
+                                }
+                            },
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("password_input")
+                        )
+
+                        if (!isCreateAccount) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                TextButton(
+                                    onClick = {
+                                        errorMessage = null
+                                        infoMessage = null
+                                        isLoading = true
+                                        scope.launch {
+                                            supabaseRepository.sendPasswordReset(email)
+                                                .onSuccess { msg -> infoMessage = msg }
+                                                .onFailure { err -> errorMessage = err.localizedMessage ?: "Reset failed." }
+                                            isLoading = false
+                                        }
+                                    },
+                                    enabled = !isLoading && email.isNotBlank(),
+                                    modifier = Modifier.minimumInteractiveComponentSize()
+                                ) {
+                                    Text("Forgot password?")
+                                }
+                            }
+                        }
+
+                        if (errorMessage != null) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.ErrorOutline,
+                                        contentDescription = "Sign-in error",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        text = errorMessage!!,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
+                        }
+
+                        if (infoMessage != null) {
+                            Surface(
+                                color = EmeraldTeal.copy(alpha = 0.14f),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.MarkEmailRead,
+                                        contentDescription = "Email confirmation",
+                                        tint = EmeraldTeal
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        text = infoMessage!!,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                errorMessage = null
+                                infoMessage = null
+                                isLoading = true
+                                scope.launch {
+                                    val result = if (isCreateAccount) {
+                                        supabaseRepository.signUp(
+                                            email = email,
+                                            password = password,
+                                            fullName = fullName
+                                        )
+                                    } else {
+                                        supabaseRepository.signIn(email = email, password = password)
+                                    }
+                                    result.onSuccess { msg ->
+                                        if (supabaseRepository.sessionFlow.value != null) {
+                                            onAuthSuccess()
+                                        } else {
+                                            infoMessage = msg
+                                        }
+                                    }.onFailure { err ->
+                                        errorMessage = err.localizedMessage ?: "Email authentication failed."
+                                    }
+                                    isLoading = false
+                                }
+                            },
+                            enabled = !isLoading && !autoChecking && email.isNotBlank() && password.length >= 6,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("email_sign_in_button"),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 2.5.dp
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(if (isCreateAccount) "Creating Account..." else "Signing in...")
+                            } else {
+                                Icon(Icons.Rounded.Login, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = if (isCreateAccount) "Create Email Account" else "Sign in with Email",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
                         }
                     }
                 }
 
-                Button(
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "OR",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                }
+
+                FilledTonalButton(
                     onClick = {
                         errorMessage = null
+                        infoMessage = null
                         isLoading = true
                         onGoogleSignInClicked(
                             context = context,
@@ -321,20 +565,19 @@ fun AuthScreen(
                     enabled = !isLoading && !autoChecking,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .height(52.dp)
                         .testTag("google_sign_in_button"),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(14.dp)
                 ) {
-                    if (isLoading || autoChecking) {
+                    if (autoChecking) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(20.dp),
                             strokeWidth = 2.5.dp
                         )
-                        Spacer(Modifier.width(12.dp))
-                        Text(if (autoChecking) "Checking Google Session..." else "Signing in...")
+                        Spacer(Modifier.width(10.dp))
+                        Text("Checking Google Session...")
                     } else {
-                        Icon(Icons.Rounded.Login, contentDescription = null)
+                        Icon(Icons.Rounded.AccountCircle, contentDescription = null)
                         Spacer(Modifier.width(10.dp))
                         Text(
                             text = "Sign in with Google",
@@ -343,8 +586,24 @@ fun AuthScreen(
                     }
                 }
 
+                AuthFeatureRow(
+                    icon = Icons.Rounded.Domain,
+                    title = "Multi-School & Branch Tenancy",
+                    subtitle = "Strict tenant isolation with academic years, terms, and white-label module toggles."
+                )
+                AuthFeatureRow(
+                    icon = Icons.Rounded.AutoAwesome,
+                    title = "Role-Scoped Gemini AI Copilot",
+                    subtitle = "Lesson plans, report summaries, early-warning risk detection, and route optimization."
+                )
+                AuthFeatureRow(
+                    icon = Icons.Rounded.VerifiedUser,
+                    title = "End-to-End Approvals & PDF Reports",
+                    subtitle = "Report card template governance, leave balance automation, and immutable audit logs."
+                )
+
                 Text(
-                    text = "Protected by Google Identity Services, Firebase App Check, and row-level Firestore tenancy rules.",
+                    text = "Protected by email-scoped PostgreSQL RLS, Google Identity Services, Firebase App Check, and row-level tenancy rules.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 4.dp)
@@ -365,13 +624,13 @@ private fun AuthFeatureRow(
         shape = RoundedCornerShape(18.dp)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(42.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -385,7 +644,7 @@ private fun AuthFeatureRow(
             Column {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(2.dp))
