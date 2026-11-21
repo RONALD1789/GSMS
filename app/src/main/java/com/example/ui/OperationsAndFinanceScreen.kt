@@ -12,8 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.model.FinanceEntry
-import com.example.model.GsmsModule
+import com.example.model.*
 import com.example.ui.theme.*
 
 @Composable
@@ -23,18 +22,10 @@ fun OperationsAndFinanceScreen(
     viewModel: GsmsViewModel
 ) {
     val school = workspace.activeSchool ?: return
-    val enabledSections = remember(school.enabledModules) {
-        buildList {
-            if (school.hasModule(GsmsModule.FINANCE)) add("Finance")
-            if (school.hasModule(GsmsModule.LIBRARY)) add("Library")
-            if (school.hasModule(GsmsModule.TRANSPORT)) add("Transport")
-            if (school.hasModule(GsmsModule.HEALTH_WELFARE)) add("Welfare")
-            if (school.hasModule(GsmsModule.DISCIPLINE)) add("Discipline")
-            if (school.hasModule(GsmsModule.INVENTORY_ASSETS)) add("Assets")
-            if (school.hasModule(GsmsModule.HOSTEL_BOARDING)) add("Hostel")
-            if (school.hasModule(GsmsModule.ADMISSIONS)) add("Admissions")
-            if (school.hasModule(GsmsModule.EVENTS)) add("Events")
-        }
+    val role = workspace.activeRole
+    val focusStudent = if (role == PortalRole.PARENT || role == PortalRole.STUDENT) workspace.students.firstOrNull() else null
+    val enabledSections = remember(role, school.enabledModules) {
+        RolePolicy.operationSections(role, school)
     }
     var activeSection by remember(enabledSections) { mutableStateOf(enabledSections.firstOrNull() ?: "") }
     var paymentTarget by remember { mutableStateOf<FinanceEntry?>(null) }
@@ -42,27 +33,35 @@ fun OperationsAndFinanceScreen(
 
     if (enabledSections.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
-            EmptyStateCard(Icons.Rounded.Lock, "Operations Modules Disabled", "Enable Finance, Library, Transport, or Campus modules in Module Registry.")
+            EmptyStateCard(
+                Icons.Rounded.Lock,
+                "Operations Restricted or Disabled",
+                "${role.shortTitle} has no enabled operational modules in this workspace."
+            )
         }
         return
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(enabledSections) { sec ->
-                FilterChip(
-                    selected = activeSection == sec,
-                    onClick = { activeSection = sec },
-                    label = { Text(sec) }
-                )
+        if (enabledSections.size > 1) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(enabledSections) { sec ->
+                    FilterChip(
+                        selected = activeSection == sec,
+                        onClick = { activeSection = sec },
+                        label = { Text(sec) }
+                    )
+                }
             }
         }
 
         if (activeSection == "Finance") {
-            val financeItems = workspace.finance.filter {
+            val canRecordPayment = role.has(RoleCapability.RECORD_FINANCE_PAYMENT)
+            val roleScopedFinance = RolePolicy.filterFinanceForRole(role, workspace.finance, focusStudent)
+            val financeItems = roleScopedFinance.filter {
                 searchQuery.isBlank() || it.title.contains(searchQuery, true) || it.partyName.contains(searchQuery, true)
             }
             LazyColumn(
@@ -71,16 +70,35 @@ fun OperationsAndFinanceScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
-                    val totalBilled = workspace.finance.filter { it.entryType == "INVOICE" }.sumOf { it.amountUsd }
-                    val totalPaid = workspace.finance.filter { it.entryType == "INVOICE" }.sumOf { it.paidUsd }
+                    val summaryEntries = if (role == PortalRole.HR_MANAGER) {
+                        roleScopedFinance
+                    } else {
+                        roleScopedFinance.filter { it.entryType == "INVOICE" }
+                    }
+                    val totalBilled = summaryEntries.sumOf { it.amountUsd }
+                    val totalPaid = summaryEntries.sumOf { it.paidUsd }
+                    val headerTitle = when (role) {
+                        PortalRole.PARENT -> "Child Fee Invoices (Read-Only)"
+                        PortalRole.HR_MANAGER -> "Staff Payroll Ledger (Read-Only)"
+                        else -> "Fees Collection Progress"
+                    }
                     ElevatedCard(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column {
-                                Text("Fees Collection Progress", style = MaterialTheme.typography.titleMedium)
-                                Text("USD ${totalPaid.toInt()} collected of USD ${totalBilled.toInt()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(headerTitle, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "USD ${totalPaid.toInt()} settled of USD ${totalBilled.toInt()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                             StatusPill("${if (totalBilled > 0) ((totalPaid / totalBilled) * 100).toInt() else 100}%", EmeraldTeal)
                         }
+                    }
+                }
+                if (financeItems.isEmpty()) {
+                    item {
+                        EmptyStateCard(Icons.Rounded.ReceiptLong, "No Finance Records", "No ledger entries are visible for ${role.shortTitle}.")
                     }
                 }
                 items(financeItems) { fin ->
@@ -95,7 +113,7 @@ fun OperationsAndFinanceScreen(
                             }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Text("Paid USD ${fin.paidUsd.toInt()} / USD ${fin.amountUsd.toInt()}", style = MaterialTheme.typography.labelMedium)
-                                if (fin.entryType == "INVOICE" && fin.paidUsd < fin.amountUsd) {
+                                if (canRecordPayment && fin.entryType == "INVOICE" && fin.paidUsd < fin.amountUsd) {
                                     FilledTonalButton(
                                         onClick = { paymentTarget = fin },
                                         modifier = Modifier.minimumInteractiveComponentSize()
@@ -107,6 +125,7 @@ fun OperationsAndFinanceScreen(
                 }
             }
         } else {
+            val canEditOps = role.has(RoleCapability.EDIT_OPERATIONS)
             val targetTypes = when (activeSection) {
                 "Library" -> setOf("LIBRARY_BOOK", "LIBRARY_BORROW")
                 "Transport" -> setOf("VEHICLE", "ROUTE", "TRIP")
@@ -127,20 +146,31 @@ fun OperationsAndFinanceScreen(
             ) {
                 item {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("$activeSection Module", style = MaterialTheme.typography.titleLarge)
-                        FilledTonalButton(
-                            onClick = { showAddOpDialog = true },
-                            modifier = Modifier.minimumInteractiveComponentSize()
-                        ) {
-                            Icon(Icons.Rounded.Add, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Add Record")
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("$activeSection Module", style = MaterialTheme.typography.titleLarge)
+                            if (!canEditOps) {
+                                Text("Read-only oversight for ${role.shortTitle}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        if (canEditOps) {
+                            FilledTonalButton(
+                                onClick = { showAddOpDialog = true },
+                                modifier = Modifier.minimumInteractiveComponentSize()
+                            ) {
+                                Icon(Icons.Rounded.Add, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Add Record")
+                            }
                         }
                     }
                 }
                 if (ops.isEmpty()) {
                     item {
-                        EmptyStateCard(Icons.Rounded.Widgets, "No $activeSection Entries Yet", "Tap Add Record to log a new item in $activeSection.")
+                        EmptyStateCard(
+                            Icons.Rounded.Widgets,
+                            "No $activeSection Entries Yet",
+                            if (canEditOps) "Tap Add Record to log a new item in $activeSection." else "No records available in $activeSection."
+                        )
                     }
                 } else {
                     items(ops) { op ->

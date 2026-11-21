@@ -22,18 +22,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.example.R
 import com.example.data.AiRepository
 import com.example.data.GsmsRepository
+import com.example.model.GsmsTab
 import com.example.model.PortalRole
+import com.example.model.RolePolicy
+import com.example.ui.theme.EmeraldTeal
 import com.example.ui.theme.GsmsTheme
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.launch
 
 internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
@@ -42,15 +44,6 @@ internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
     }
     addAuthStateListener(listener)
     awaitClose { removeAuthStateListener(listener) }
-}
-
-private enum class GsmsTab(val label: String, val icon: ImageVector) {
-    DASHBOARD("Dashboard", Icons.Rounded.Dashboard),
-    ACADEMICS("Academics", Icons.Rounded.School),
-    PEOPLE("People & HR", Icons.Rounded.Groups),
-    OPERATIONS("Operations", Icons.Rounded.AccountBalanceWallet),
-    ANALYTICS("Analytics", Icons.Rounded.Insights),
-    AI_GOVERNANCE("AI & Admin", Icons.Rounded.AutoAwesome)
 }
 
 @Composable
@@ -111,6 +104,19 @@ private fun GsmsAuthenticatedShell(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val successWorkspace = (workspaceState as? UiState.Success)?.data
+    val activeRole = successWorkspace?.activeRole ?: PortalRole.SCHOOL_ADMIN
+    val activeSchool = successWorkspace?.activeSchool
+    val visibleTabs = remember(activeRole, activeSchool?.enabledModules) {
+        RolePolicy.visibleTabs(activeRole, activeSchool)
+    }
+
+    LaunchedEffect(visibleTabs) {
+        if (selectedTab !in visibleTabs) {
+            selectedTab = visibleTabs.firstOrNull() ?: GsmsTab.DASHBOARD
+        }
+    }
+
     LaunchedEffect(bannerMessage) {
         val msg = bannerMessage
         if (!msg.isNullOrBlank()) {
@@ -126,28 +132,44 @@ private fun GsmsAuthenticatedShell(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(modifier = Modifier.widthIn(max = 310.dp)) {
+            ModalDrawerSheet(modifier = Modifier.widthIn(max = 320.dp)) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text("GSMS Role Portals", style = MaterialTheme.typography.titleLarge)
                     Text(
-                        "Switch between all 12 institutional portals",
+                        "Each portal strictly enforces role permissions & data access",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 HorizontalDivider()
-                val activeRole = (workspaceState as? UiState.Success)?.data?.activeRole ?: PortalRole.SCHOOL_ADMIN
                 LazyColumn(
                     contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(PortalRole.entries) { role ->
+                        val isSelected = role == activeRole
                         NavigationDrawerItem(
-                            label = { Text(role.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            selected = role == activeRole,
+                            label = {
+                                Column {
+                                    Text(role.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        role.scopeDescription,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            },
+                            selected = isSelected,
+                            badge = {
+                                if (isSelected) {
+                                    StatusPill("ACTIVE", EmeraldTeal)
+                                }
+                            },
                             onClick = {
                                 viewModel.switchRole(role)
                                 scope.launch { drawerState.close() }
@@ -171,8 +193,6 @@ private fun GsmsAuthenticatedShell(
                 contentWindowInsets = WindowInsets.safeDrawing,
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
-                    val activeSchool = (workspaceState as? UiState.Success)?.data?.activeSchool
-                    val activeRole = (workspaceState as? UiState.Success)?.data?.activeRole ?: PortalRole.SCHOOL_ADMIN
                     Column {
                         TopAppBar(
                             navigationIcon = {
@@ -204,8 +224,10 @@ private fun GsmsAuthenticatedShell(
                                 IconButton(onClick = { showSearchBar = !showSearchBar }) {
                                     Icon(Icons.Rounded.Search, contentDescription = "Search GSMS")
                                 }
-                                IconButton(onClick = { selectedTab = GsmsTab.ANALYTICS }) {
-                                    Icon(Icons.Rounded.NotificationsActive, contentDescription = "Alerts & Notices")
+                                if (GsmsTab.ANALYTICS in visibleTabs) {
+                                    IconButton(onClick = { selectedTab = GsmsTab.ANALYTICS }) {
+                                        Icon(Icons.Rounded.NotificationsActive, contentDescription = "Alerts & Notices")
+                                    }
                                 }
                             }
                         )
@@ -213,7 +235,7 @@ private fun GsmsAuthenticatedShell(
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = viewModel::updateSearchQuery,
-                                placeholder = { Text("Search students, staff, reports, finance...") },
+                                placeholder = { Text("Search within ${activeRole.shortTitle} portal...") },
                                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                                 trailingIcon = {
                                     if (searchQuery.isNotEmpty()) {
@@ -235,12 +257,13 @@ private fun GsmsAuthenticatedShell(
                 bottomBar = {
                     if (!isWideScreen) {
                         NavigationBar(windowInsets = WindowInsets.navigationBars) {
-                            GsmsTab.entries.forEach { tab ->
+                            visibleTabs.forEach { tab ->
+                                val label = RolePolicy.tabDisplayLabel(activeRole, tab)
                                 NavigationBarItem(
                                     selected = selectedTab == tab,
                                     onClick = { selectedTab = tab },
-                                    icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                    label = { Text(tab.label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                    icon = { Icon(tabIcon(tab), contentDescription = label) },
+                                    label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                                 )
                             }
                         }
@@ -254,12 +277,13 @@ private fun GsmsAuthenticatedShell(
                 ) {
                     if (isWideScreen) {
                         NavigationRail {
-                            GsmsTab.entries.forEach { tab ->
+                            visibleTabs.forEach { tab ->
+                                val label = RolePolicy.tabDisplayLabel(activeRole, tab)
                                 NavigationRailItem(
                                     selected = selectedTab == tab,
                                     onClick = { selectedTab = tab },
-                                    icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                    label = { Text(tab.label) }
+                                    icon = { Icon(tabIcon(tab), contentDescription = label) },
+                                    label = { Text(label) }
                                 )
                             }
                         }
@@ -292,15 +316,20 @@ private fun GsmsAuthenticatedShell(
                             }
                             is UiState.Success -> {
                                 val workspace = state.data
-                                when (selectedTab) {
+                                val safeTab = if (selectedTab in visibleTabs) selectedTab else GsmsTab.DASHBOARD
+                                when (safeTab) {
                                     GsmsTab.DASHBOARD -> PortalDashboardScreen(
                                         workspace = workspace,
                                         searchQuery = searchQuery,
                                         isWideScreen = isWideScreen,
                                         onRunAiCapability = { prompt -> viewModel.askAiCopilot(workspace, prompt) },
                                         onOpenAiTab = { selectedTab = GsmsTab.AI_GOVERNANCE },
-                                        onNavigateToTab = { idx ->
-                                            selectedTab = GsmsTab.entries.getOrElse(idx) { GsmsTab.DASHBOARD }
+                                        onNavigateToTab = { targetTab ->
+                                            if (targetTab in visibleTabs) {
+                                                selectedTab = targetTab
+                                            } else {
+                                                viewModel.showBanner("Access restricted for ${workspace.activeRole.shortTitle} role.")
+                                            }
                                         },
                                         onSelectSchool = { school -> viewModel.switchSchool(school) },
                                         onBannerMessage = { msg -> viewModel.showBanner(msg) }
@@ -341,6 +370,17 @@ private fun GsmsAuthenticatedShell(
                 }
             }
         }
+    }
+}
+
+private fun tabIcon(tab: GsmsTab): ImageVector {
+    return when (tab) {
+        GsmsTab.DASHBOARD -> Icons.Rounded.Dashboard
+        GsmsTab.ACADEMICS -> Icons.Rounded.School
+        GsmsTab.PEOPLE -> Icons.Rounded.Groups
+        GsmsTab.OPERATIONS -> Icons.Rounded.AccountBalanceWallet
+        GsmsTab.ANALYTICS -> Icons.Rounded.Insights
+        GsmsTab.AI_GOVERNANCE -> Icons.Rounded.AutoAwesome
     }
 }
 

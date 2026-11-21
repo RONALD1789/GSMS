@@ -11,7 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.model.GsmsModule
+import com.example.model.*
 import com.example.ui.theme.*
 
 @Composable
@@ -21,15 +21,23 @@ fun AnalyticsAndCommsScreen(
     viewModel: GsmsViewModel
 ) {
     val school = workspace.activeSchool ?: return
-    val tabs = remember(school.enabledModules) {
-        buildList {
-            if (school.hasModule(GsmsModule.ANALYTICS)) add("Analytics & Alerts")
-            if (school.hasModule(GsmsModule.COMMUNICATION)) add("Communications")
-            add("Audit Logs")
-        }
+    val role = workspace.activeRole
+    val tabs = remember(role, school.enabledModules) {
+        RolePolicy.analyticsSubTabs(role, school)
     }
     var selectedTab by remember(tabs) { mutableIntStateOf(0) }
     var showNewMessageDialog by remember { mutableStateOf(false) }
+
+    if (tabs.isEmpty()) {
+        Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
+            EmptyStateCard(
+                Icons.Rounded.Lock,
+                "Analytics & Notices Disabled",
+                "${role.shortTitle} has no enabled analytics or notice modules."
+            )
+        }
+        return
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = selectedTab.coerceIn(0, tabs.lastIndex)) {
@@ -39,8 +47,11 @@ fun AnalyticsAndCommsScreen(
         }
 
         when (tabs.getOrNull(selectedTab)) {
-            "Analytics & Alerts" -> {
-                val filteredAlerts = workspace.alerts.filter {
+            "Analytics & Alerts", "Role Alerts" -> {
+                val showCharts = role.has(RoleCapability.VIEW_ANALYTICS_CHARTS)
+                val canManageAlerts = role.has(RoleCapability.MANAGE_ALERTS)
+                val roleAlerts = RolePolicy.filterAlertsForRole(role, workspace.alerts)
+                val filteredAlerts = roleAlerts.filter {
                     searchQuery.isBlank() || it.targetName.contains(searchQuery, true) || it.reason.contains(searchQuery, true)
                 }
                 LazyColumn(
@@ -48,29 +59,40 @@ fun AnalyticsAndCommsScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    item {
-                        BarChartCard(
-                            title = "Class & Learner Mastery Analytics",
-                            subtitle = "Live student average score breakdown",
-                            bars = workspace.students.take(5).map {
-                                it.fullName.substringBefore(" ") to it.averageScore.toFloat()
-                            },
-                            barColor = CobaltBlue
-                        )
-                    }
-                    item {
-                        TrendSparklineCard(
-                            title = "School Attendance Stability",
-                            headlineValue = "${if (workspace.students.isEmpty()) 94.0 else workspace.students.map { it.attendanceRate }.average().toInt()}%",
-                            points = workspace.students.map { it.attendanceRate.toFloat() }.ifEmpty { listOf(91f, 93f, 95f, 94f) },
-                            lineColor = EmeraldTeal
-                        )
+                    if (showCharts) {
+                        item {
+                            BarChartCard(
+                                title = "Class & Learner Mastery Analytics",
+                                subtitle = "Live student average score breakdown",
+                                bars = workspace.students.take(5).map {
+                                    it.fullName.substringBefore(" ") to it.averageScore.toFloat()
+                                },
+                                barColor = CobaltBlue
+                            )
+                        }
+                        item {
+                            TrendSparklineCard(
+                                title = "School Attendance Stability",
+                                headlineValue = "${if (workspace.students.isEmpty()) 94.0 else workspace.students.map { it.attendanceRate }.average().toInt()}%",
+                                points = workspace.students.map { it.attendanceRate.toFloat() }.ifEmpty { listOf(91f, 93f, 95f, 94f) },
+                                lineColor = EmeraldTeal
+                            )
+                        }
                     }
                     item {
                         SectionHeader(
-                            title = "Early Warning AI Alerts",
-                            subtitle = "${filteredAlerts.count { it.status != "RESOLVED" }} active risk alerts"
+                            title = if (showCharts) "Early Warning AI Alerts" else "${role.shortTitle} AI Alerts",
+                            subtitle = "${filteredAlerts.count { it.status != "RESOLVED" }} active risk alerts in ${role.shortTitle} scope"
                         )
+                    }
+                    if (filteredAlerts.isEmpty()) {
+                        item {
+                            EmptyStateCard(
+                                Icons.Rounded.VerifiedUser,
+                                "No Active Alerts in ${role.shortTitle} Scope",
+                                "Early-warning risks assigned to your department will appear here."
+                            )
+                        }
                     }
                     items(filteredAlerts) { alert ->
                         ElevatedCard(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
@@ -89,7 +111,7 @@ fun AnalyticsAndCommsScreen(
                                 }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     StatusPill(alert.status, if (alert.status == "RESOLVED") EmeraldTeal else WarmAmber)
-                                    if (alert.status != "RESOLVED") {
+                                    if (canManageAlerts && alert.status != "RESOLVED") {
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             if (alert.status == "OPEN") {
                                                 OutlinedButton(
@@ -111,6 +133,10 @@ fun AnalyticsAndCommsScreen(
             }
 
             "Communications" -> {
+                val canCompose = role.has(RoleCapability.COMPOSE_COMMUNICATIONS)
+                val visibleComms = RolePolicy.filterCommunicationsForRole(role, workspace.communications).filter {
+                    searchQuery.isBlank() || it.title.contains(searchQuery, true) || it.body.contains(searchQuery, true)
+                }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
@@ -119,20 +145,33 @@ fun AnalyticsAndCommsScreen(
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Communication Hub", style = MaterialTheme.typography.titleLarge)
-                                Text("Announcements, SMS, Email, Push & Parent-Teacher", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    if (canCompose) "Communication Hub" else "School Notices & Updates",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                                Text(
+                                    if (canCompose) {
+                                        "Announcements, SMS, Email, Push & Parent-Teacher"
+                                    } else {
+                                        "Official school announcements for ${role.shortTitle}"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                            Button(
-                                onClick = { showNewMessageDialog = true },
-                                modifier = Modifier.minimumInteractiveComponentSize()
-                            ) {
-                                Icon(Icons.Rounded.Send, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Compose")
+                            if (canCompose) {
+                                Button(
+                                    onClick = { showNewMessageDialog = true },
+                                    modifier = Modifier.minimumInteractiveComponentSize()
+                                ) {
+                                    Icon(Icons.Rounded.Send, contentDescription = null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Compose")
+                                }
                             }
                         }
                     }
-                    items(workspace.communications) { msg ->
+                    items(visibleComms) { msg ->
                         ElevatedCard(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

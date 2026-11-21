@@ -23,7 +23,7 @@ fun PortalDashboardScreen(
     isWideScreen: Boolean,
     onRunAiCapability: (String) -> Unit,
     onOpenAiTab: () -> Unit,
-    onNavigateToTab: (Int) -> Unit,
+    onNavigateToTab: (GsmsTab) -> Unit,
     onSelectSchool: (School) -> Unit,
     onBannerMessage: (String) -> Unit
 ) {
@@ -31,6 +31,7 @@ fun PortalDashboardScreen(
     val school = workspace.activeSchool
     val lowData = workspace.userProfile?.lowDataMode == true
     val aiEnabled = school?.hasModule(GsmsModule.AI_TOOLS) != false
+    val visibleTabs = RolePolicy.visibleTabs(role, school)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -84,7 +85,7 @@ fun PortalDashboardScreen(
                         title = "Schools & Churn Risk Watchlist",
                         subtitle = "${atRiskSchools.size} school(s) flagged for retention follow-up",
                         actionLabel = "Manage Tenants",
-                        onActionClick = { onNavigateToTab(5) }
+                        onActionClick = { onNavigateToTab(GsmsTab.AI_GOVERNANCE) }
                     )
                 }
                 items(workspace.schools.filter {
@@ -137,21 +138,22 @@ fun PortalDashboardScreen(
                     )
                 }
                 item {
-                    QuickActionStrip(
-                        actions = listOf(
-                            "Module Registry" to { onNavigateToTab(5) },
-                            "Report Templates" to { onNavigateToTab(1) },
-                            "Leave Approvals" to { onNavigateToTab(2) },
-                            "Send Notice" to { onNavigateToTab(4) }
-                        )
-                    )
+                    val quickActions = buildList {
+                        add("Module Registry" to { onNavigateToTab(GsmsTab.AI_GOVERNANCE) })
+                        if (GsmsTab.ACADEMICS in visibleTabs) add("Report Templates" to { onNavigateToTab(GsmsTab.ACADEMICS) })
+                        if (GsmsTab.PEOPLE in visibleTabs) add("Leave Approvals" to { onNavigateToTab(GsmsTab.PEOPLE) })
+                        if (GsmsTab.ANALYTICS in visibleTabs) add("Send Notice" to { onNavigateToTab(GsmsTab.ANALYTICS) })
+                    }
+                    QuickActionStrip(actions = quickActions)
                 }
-                item {
-                    AlertSnippetList(
-                        title = "AI Action Recommendations & Alerts",
-                        alerts = workspace.alerts,
-                        onSeeAll = { onNavigateToTab(4) }
-                    )
+                if (GsmsTab.ANALYTICS in visibleTabs) {
+                    item {
+                        AlertSnippetList(
+                            title = "AI Action Recommendations & Alerts",
+                            alerts = RolePolicy.filterAlertsForRole(role, workspace.alerts),
+                            onSeeAll = { onNavigateToTab(GsmsTab.ANALYTICS) }
+                        )
+                    }
                 }
             }
 
@@ -186,12 +188,12 @@ fun PortalDashboardScreen(
                     SectionHeader(
                         title = "Pending Report Approvals",
                         subtitle = "Review teacher submissions and publish to parents",
-                        actionLabel = "Review Queue",
-                        onActionClick = { onNavigateToTab(1) }
+                        actionLabel = if (GsmsTab.ACADEMICS in visibleTabs) "Review Queue" else null,
+                        onActionClick = if (GsmsTab.ACADEMICS in visibleTabs) { { onNavigateToTab(GsmsTab.ACADEMICS) } } else null
                     )
                 }
                 items(workspace.reportCards.filter { it.status == ReportStatus.SUBMITTED.name }) { report ->
-                    ReportCardSummaryRow(report = report, onClick = { onNavigateToTab(1) })
+                    ReportCardSummaryRow(report = report, onClick = { onNavigateToTab(GsmsTab.ACADEMICS) })
                 }
             }
 
@@ -212,20 +214,31 @@ fun PortalDashboardScreen(
                     )
                 }
                 item {
-                    QuickActionStrip(
-                        actions = listOf(
-                            "Mark Attendance" to { onNavigateToTab(1) },
-                            "Fill Report Cards" to { onNavigateToTab(1) },
-                            "Apply for Leave" to { onNavigateToTab(2) },
-                            "AI Lesson Plan" to {
+                    val teacherActions = buildList {
+                        if (GsmsTab.ACADEMICS in visibleTabs) {
+                            add("Mark Attendance" to { onNavigateToTab(GsmsTab.ACADEMICS) })
+                            add("Fill Report Cards" to { onNavigateToTab(GsmsTab.ACADEMICS) })
+                        }
+                        if (GsmsTab.PEOPLE in visibleTabs) {
+                            add("Apply for Leave" to { onNavigateToTab(GsmsTab.PEOPLE) })
+                        }
+                        if (aiEnabled) {
+                            add("AI Lesson Plan" to {
                                 onRunAiCapability("Generate a 45-minute interactive lesson plan for Grade 10A Physics on Kinematics with formative quiz questions.")
                                 onOpenAiTab()
-                            }
-                        )
-                    )
+                            })
+                        }
+                    }
+                    if (teacherActions.isNotEmpty()) {
+                        QuickActionStrip(actions = teacherActions)
+                    }
                 }
                 item {
-                    SectionHeader(title = "Today's Teaching Schedule", actionLabel = "Full Timetable", onActionClick = { onNavigateToTab(1) })
+                    SectionHeader(
+                        title = "Today's Teaching Schedule",
+                        actionLabel = if (GsmsTab.ACADEMICS in visibleTabs) "Full Timetable" else null,
+                        onActionClick = if (GsmsTab.ACADEMICS in visibleTabs) { { onNavigateToTab(GsmsTab.ACADEMICS) } } else null
+                    )
                 }
                 items(workspace.academics.filter { it.recordType == "TIMETABLE" }) { slot ->
                     ElevatedCard(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
@@ -250,7 +263,9 @@ fun PortalDashboardScreen(
 
             PortalRole.STUDENT -> {
                 val student = workspace.students.firstOrNull()
-                val publishedReports = workspace.reportCards.filter { it.status == ReportStatus.PUBLISHED.name }
+                val publishedReports = workspace.reportCards.filter {
+                    it.status == ReportStatus.PUBLISHED.name && (student == null || it.studentId == student.id)
+                }
                 item {
                     KpiGrid(
                         isWideScreen = isWideScreen,
@@ -270,18 +285,23 @@ fun PortalDashboardScreen(
                         lineColor = EmeraldTeal
                     )
                 }
-                item {
-                    PublishedReportDownloadSection(
-                        school = school,
-                        reports = publishedReports,
-                        onBannerMessage = onBannerMessage
-                    )
+                if (school?.hasModule(GsmsModule.REPORT_CARDS) != false) {
+                    item {
+                        PublishedReportDownloadSection(
+                            school = school,
+                            reports = publishedReports,
+                            onBannerMessage = onBannerMessage
+                        )
+                    }
                 }
             }
 
             PortalRole.PARENT -> {
                 val child = workspace.students.firstOrNull()
-                val publishedReports = workspace.reportCards.filter { it.status == ReportStatus.PUBLISHED.name }
+                val publishedReports = workspace.reportCards.filter {
+                    it.status == ReportStatus.PUBLISHED.name && (child == null || it.studentId == child.id)
+                }
+                val parentMessages = RolePolicy.filterCommunicationsForRole(role, workspace.communications)
                 item {
                     KpiGrid(
                         isWideScreen = isWideScreen,
@@ -289,25 +309,29 @@ fun PortalDashboardScreen(
                             KpiData("Child Average", "${child?.averageScore ?: 92.4}%", child?.className ?: "Grade 10A", Icons.Rounded.School, CobaltBlue),
                             KpiData("Attendance", "${child?.attendanceRate ?: 97.5}%", "Term 1", Icons.Rounded.Verified, EmeraldTeal),
                             KpiData("Fee Balance", "$${(child?.feeBalanceUsd ?: 0.0).toInt()}", "Account", Icons.Rounded.Payments, if ((child?.feeBalanceUsd ?: 0.0) > 0) WarmAmber else EmeraldTeal),
-                            KpiData("Messages", "${workspace.communications.size}", "School Updates", Icons.Rounded.MarkEmailUnread, VioletAi)
+                            KpiData("Messages", "${parentMessages.size}", "School Updates", Icons.Rounded.MarkEmailUnread, VioletAi)
                         )
                     )
                 }
-                item {
-                    PublishedReportDownloadSection(
-                        school = school,
-                        reports = publishedReports,
-                        onBannerMessage = onBannerMessage
-                    )
+                if (school?.hasModule(GsmsModule.REPORT_CARDS) != false) {
+                    item {
+                        PublishedReportDownloadSection(
+                            school = school,
+                            reports = publishedReports,
+                            onBannerMessage = onBannerMessage
+                        )
+                    }
                 }
-                item {
-                    SectionHeader(title = "Recent School Announcements", actionLabel = "Messages", onActionClick = { onNavigateToTab(4) })
-                }
-                items(workspace.communications.take(3)) { msg ->
-                    ElevatedCard(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(msg.title, style = MaterialTheme.typography.titleMedium)
-                            Text(msg.body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (GsmsTab.ANALYTICS in visibleTabs) {
+                    item {
+                        SectionHeader(title = "Recent School Announcements", actionLabel = "Notices", onActionClick = { onNavigateToTab(GsmsTab.ANALYTICS) })
+                    }
+                    items(parentMessages.take(3)) { msg ->
+                        ElevatedCard(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(msg.title, style = MaterialTheme.typography.titleMedium)
+                                Text(msg.body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
@@ -330,15 +354,18 @@ fun PortalDashboardScreen(
                     )
                 }
                 item {
-                    QuickActionStrip(
-                        actions = listOf(
-                            "Open Fee Ledger" to { onNavigateToTab(3) },
-                            "Overdue Alerts" to { onNavigateToTab(4) }
-                        )
-                    )
+                    val finActions = buildList {
+                        if (GsmsTab.OPERATIONS in visibleTabs) add("Open Fee Ledger" to { onNavigateToTab(GsmsTab.OPERATIONS) })
+                        if (GsmsTab.ANALYTICS in visibleTabs) add("Overdue Alerts" to { onNavigateToTab(GsmsTab.ANALYTICS) })
+                    }
+                    if (finActions.isNotEmpty()) QuickActionStrip(actions = finActions)
                 }
                 item {
-                    SectionHeader(title = "Recent Invoices & Payroll", actionLabel = "Finance Hub", onActionClick = { onNavigateToTab(3) })
+                    SectionHeader(
+                        title = "Recent Invoices & Payroll",
+                        actionLabel = if (GsmsTab.OPERATIONS in visibleTabs) "Finance Hub" else null,
+                        onActionClick = if (GsmsTab.OPERATIONS in visibleTabs) { { onNavigateToTab(GsmsTab.OPERATIONS) } } else null
+                    )
                 }
                 items(workspace.finance.take(4)) { entry ->
                     ElevatedCard(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
@@ -372,10 +399,18 @@ fun PortalDashboardScreen(
                     )
                 }
                 item {
-                    SectionHeader(title = "Leave Approval Queue", actionLabel = "Open HR", onActionClick = { onNavigateToTab(2) })
+                    SectionHeader(
+                        title = "Leave Approval Queue",
+                        actionLabel = if (GsmsTab.PEOPLE in visibleTabs) "Open HR" else null,
+                        onActionClick = if (GsmsTab.PEOPLE in visibleTabs) { { onNavigateToTab(GsmsTab.PEOPLE) } } else null
+                    )
                 }
                 items(workspace.leaveRequests) { lv ->
-                    ElevatedCard(onClick = { onNavigateToTab(2) }, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                    ElevatedCard(
+                        onClick = { if (GsmsTab.PEOPLE in visibleTabs) onNavigateToTab(GsmsTab.PEOPLE) },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Row(modifier = Modifier.padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("${lv.staffName} (${lv.leaveType})", style = MaterialTheme.typography.titleSmall)
@@ -394,32 +429,41 @@ fun PortalDashboardScreen(
                 val targetTypes = when (role) {
                     PortalRole.LIBRARIAN -> setOf("LIBRARY_BOOK", "LIBRARY_BORROW")
                     PortalRole.TRANSPORT_MANAGER -> setOf("VEHICLE", "ROUTE", "TRIP")
-                    PortalRole.WELFARE_NURSE -> setOf("WELFARE", "DISCIPLINE")
+                    PortalRole.WELFARE_NURSE -> setOf("WELFARE", "DISCIPLINE", "HOSTEL")
                     else -> setOf("ADMISSION", "EVENT")
                 }
                 val filteredOps = workspace.operations.filter { it.moduleType in targetTypes }
+                val roleAlerts = RolePolicy.filterAlertsForRole(role, workspace.alerts)
                 item {
                     KpiGrid(
                         isWideScreen = isWideScreen,
                         cards = listOf(
                             KpiData("Active Records", "${filteredOps.size}", role.shortTitle, Icons.Rounded.Inventory2, CobaltBlue),
                             KpiData("Attention Needed", "${filteredOps.count { it.status.contains("OVERDUE") || it.status.contains("DELAY") || it.status.contains("FOLLOW") }}", "Live", Icons.Rounded.NotificationImportant, WarmAmber),
-                            KpiData("Students Linked", "${workspace.students.size}", "Campus", Icons.Rounded.Groups, EmeraldTeal),
-                            KpiData("Open Alerts", "${workspace.alerts.count { it.status != "RESOLVED" }}", "Early Warning", Icons.Rounded.Shield, CrimsonRed)
+                            KpiData(
+                                if (role == PortalRole.LIBRARIAN || role == PortalRole.TRANSPORT_MANAGER) "Campus Scope" else "Students Linked",
+                                if (role == PortalRole.LIBRARIAN || role == PortalRole.TRANSPORT_MANAGER) "${filteredOps.count { it.status == "ACTIVE" || it.status == "ON_TIME" }}" else "${workspace.students.size}",
+                                "Active",
+                                Icons.Rounded.Groups,
+                                EmeraldTeal
+                            ),
+                            KpiData("Role Alerts", "${roleAlerts.count { it.status != "RESOLVED" }}", role.shortTitle, Icons.Rounded.Shield, CrimsonRed)
                         )
                     )
                 }
-                item {
-                    SectionHeader(title = "${role.shortTitle} Operations", actionLabel = "Manage All", onActionClick = { onNavigateToTab(3) })
-                }
-                items(filteredOps) { op ->
-                    ElevatedCard(onClick = { onNavigateToTab(3) }, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
-                        Row(modifier = Modifier.padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(op.title, style = MaterialTheme.typography.titleSmall)
-                                Text(op.subtitle ?: op.notes ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (GsmsTab.OPERATIONS in visibleTabs) {
+                    item {
+                        SectionHeader(title = "${role.shortTitle} Operations", actionLabel = "Manage All", onActionClick = { onNavigateToTab(GsmsTab.OPERATIONS) })
+                    }
+                    items(filteredOps) { op ->
+                        ElevatedCard(onClick = { onNavigateToTab(GsmsTab.OPERATIONS) }, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                            Row(modifier = Modifier.padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(op.title, style = MaterialTheme.typography.titleSmall)
+                                    Text(op.subtitle ?: op.notes ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                StatusPill(op.status, CobaltBlue)
                             }
-                            StatusPill(op.status, CobaltBlue)
                         }
                     }
                 }

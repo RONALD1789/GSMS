@@ -25,16 +25,13 @@ fun AcademicsAndReportsScreen(
     onBannerMessage: (String) -> Unit
 ) {
     val school = workspace.activeSchool ?: return
+    val role = workspace.activeRole
     val context = LocalContext.current
-    val tabs = remember(school.enabledModules) {
-        buildList {
-            if (school.hasModule(GsmsModule.ACADEMICS) || school.hasModule(GsmsModule.EXAMS)) add("Academics & Exams")
-            if (school.hasModule(GsmsModule.ATTENDANCE)) add("Attendance")
-            if (school.hasModule(GsmsModule.REPORT_CARDS)) {
-                add("Report Cards")
-                add("Templates")
-            }
-        }
+    val isStudentOrParent = role == PortalRole.STUDENT || role == PortalRole.PARENT
+    val focusStudent = if (isStudentOrParent) workspace.students.firstOrNull() else null
+
+    val tabs = remember(role, school.enabledModules) {
+        RolePolicy.academicSubTabs(role, school)
     }
     var selectedTab by remember(tabs) { mutableIntStateOf(0) }
     var showAddAcademicDialog by remember { mutableStateOf(false) }
@@ -46,8 +43,8 @@ fun AcademicsAndReportsScreen(
         Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
             EmptyStateCard(
                 Icons.Rounded.Lock,
-                "Academic Modules Disabled",
-                "Enable Academics, Attendance, or Report Cards in Governance -> Module Registry."
+                "Academics Restricted or Disabled",
+                "${role.shortTitle} has no enabled academic modules in this view."
             )
         }
         return
@@ -66,8 +63,11 @@ fun AcademicsAndReportsScreen(
 
         when (tabs.getOrNull(selectedTab)) {
             "Academics & Exams" -> {
-                val items = workspace.academics.filter {
-                    searchQuery.isBlank() || it.title.contains(searchQuery, true) || it.className.contains(searchQuery, true)
+                val canEditAcademics = role.has(RoleCapability.EDIT_ACADEMICS)
+                val items = workspace.academics.filter { rec ->
+                    val classMatch = focusStudent == null || rec.className.equals(focusStudent.className, ignoreCase = true)
+                    val queryMatch = searchQuery.isBlank() || rec.title.contains(searchQuery, true) || rec.className.contains(searchQuery, true)
+                    classMatch && queryMatch
                 }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -76,14 +76,28 @@ fun AcademicsAndReportsScreen(
                 ) {
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Timetables, Exams & Marks", style = MaterialTheme.typography.titleLarge)
-                            FilledTonalButton(
-                                onClick = { showAddAcademicDialog = true },
-                                modifier = Modifier.minimumInteractiveComponentSize().testTag("add_academic_button")
-                            ) {
-                                Icon(Icons.Rounded.Add, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Add Entry")
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    if (isStudentOrParent) "Class Timetable & Exams" else "Timetables, Exams & Marks",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                                if (!canEditAcademics) {
+                                    Text(
+                                        "Read-only view for ${role.shortTitle}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (canEditAcademics) {
+                                FilledTonalButton(
+                                    onClick = { showAddAcademicDialog = true },
+                                    modifier = Modifier.minimumInteractiveComponentSize().testTag("add_academic_button")
+                                ) {
+                                    Icon(Icons.Rounded.Add, contentDescription = null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Add Entry")
+                                }
                             }
                         }
                     }
@@ -115,6 +129,13 @@ fun AcademicsAndReportsScreen(
             }
 
             "Attendance" -> {
+                val canMarkAttendance = role.has(RoleCapability.MARK_ATTENDANCE)
+                val visibleStudents = if (focusStudent != null) listOf(focusStudent) else workspace.students
+                val visibleAttendance = if (focusStudent != null) {
+                    workspace.attendance.filter { it.targetName.equals(focusStudent.fullName, ignoreCase = true) }
+                } else {
+                    workspace.attendance
+                }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
@@ -122,11 +143,19 @@ fun AcademicsAndReportsScreen(
                 ) {
                     item {
                         SectionHeader(
-                            title = "Quick Attendance Roll Call",
-                            subtitle = "Tap Present, Late, or Absent to sync live to Firestore"
+                            title = when {
+                                isStudentOrParent -> "Personal Attendance Record"
+                                canMarkAttendance -> "Quick Attendance Roll Call"
+                                else -> "Attendance Oversight (Read-Only)"
+                            },
+                            subtitle = when {
+                                isStudentOrParent -> "Live attendance synced from class roll call"
+                                canMarkAttendance -> "Tap Present, Late, or Absent to sync live to Firestore"
+                                else -> "View-only attendance metrics for ${role.shortTitle}"
+                            }
                         )
                     }
-                    items(workspace.students) { student ->
+                    items(visibleStudents) { student ->
                         ElevatedCard(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -136,13 +165,15 @@ fun AcademicsAndReportsScreen(
                                     }
                                     StatusPill(student.riskLevel, riskColor(student.riskLevel))
                                 }
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    listOf("PRESENT" to EmeraldTeal, "LATE" to WarmAmber, "ABSENT" to CrimsonRed).forEach { (status, color) ->
-                                        OutlinedButton(
-                                            onClick = { viewModel.recordAttendance(school, workspace.activeBranchId, student, status) },
-                                            modifier = Modifier.weight(1f).minimumInteractiveComponentSize()
-                                        ) {
-                                            Text(status, color = color, style = MaterialTheme.typography.labelLarge)
+                                if (canMarkAttendance) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        listOf("PRESENT" to EmeraldTeal, "LATE" to WarmAmber, "ABSENT" to CrimsonRed).forEach { (status, color) ->
+                                            OutlinedButton(
+                                                onClick = { viewModel.recordAttendance(school, workspace.activeBranchId, student, status) },
+                                                modifier = Modifier.weight(1f).minimumInteractiveComponentSize()
+                                            ) {
+                                                Text(status, color = color, style = MaterialTheme.typography.labelLarge)
+                                            }
                                         }
                                     }
                                 }
@@ -150,9 +181,9 @@ fun AcademicsAndReportsScreen(
                         }
                     }
                     item {
-                        SectionHeader(title = "Recent Attendance Log", subtitle = "${workspace.attendance.size} records synced")
+                        SectionHeader(title = "Recent Attendance Log", subtitle = "${visibleAttendance.size} records synced")
                     }
-                    items(workspace.attendance.take(8)) { att ->
+                    items(visibleAttendance.take(10)) { att ->
                         OutlinedCard(shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
                             Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Text("${att.targetName} (${att.dateIso})", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
@@ -164,8 +195,17 @@ fun AcademicsAndReportsScreen(
             }
 
             "Report Cards" -> {
-                val reports = workspace.reportCards.filter {
-                    searchQuery.isBlank() || it.studentName.contains(searchQuery, true)
+                val canFillSubmit = role.has(RoleCapability.FILL_SUBMIT_REPORT_CARDS)
+                val canApprovePublish = role.has(RoleCapability.APPROVE_PUBLISH_REPORT_CARDS)
+                val viewAllReports = role.has(RoleCapability.VIEW_ALL_REPORT_CARDS)
+                val reports = workspace.reportCards.filter { report ->
+                    val roleScopeMatch = if (viewAllReports) {
+                        true
+                    } else {
+                        report.status == ReportStatus.PUBLISHED.name && (focusStudent == null || report.studentId == focusStudent.id)
+                    }
+                    val queryMatch = searchQuery.isBlank() || report.studentName.contains(searchQuery, true)
+                    roleScopeMatch && queryMatch
                 }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -175,17 +215,39 @@ fun AcademicsAndReportsScreen(
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Report Card Workflow", style = MaterialTheme.typography.titleLarge)
-                                Text("Fill → Submit → Principal Review → Publish PDF", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    if (isStudentOrParent) "Published Report Cards" else "Report Card Workflow",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                                Text(
+                                    if (isStudentOrParent) {
+                                        "Only Principal-published reports are visible"
+                                    } else {
+                                        "Fill → Submit → Principal Review → Publish PDF"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                            Button(
-                                onClick = { showNewReportDialog = true },
-                                modifier = Modifier.minimumInteractiveComponentSize().testTag("new_report_card_button")
-                            ) {
-                                Icon(Icons.Rounded.EditNote, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Fill Report")
+                            if (canFillSubmit) {
+                                Button(
+                                    onClick = { showNewReportDialog = true },
+                                    modifier = Modifier.minimumInteractiveComponentSize().testTag("new_report_card_button")
+                                ) {
+                                    Icon(Icons.Rounded.EditNote, contentDescription = null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Fill Report")
+                                }
                             }
+                        }
+                    }
+                    if (reports.isEmpty()) {
+                        item {
+                            EmptyStateCard(
+                                Icons.Rounded.Description,
+                                "No Report Cards Available",
+                                if (isStudentOrParent) "Published report cards will appear here once approved." else "No report cards match your filter."
+                            )
                         }
                     }
                     items(reports) { report ->
@@ -209,7 +271,7 @@ fun AcademicsAndReportsScreen(
                                 if (!report.teacherRemarks.isNullOrBlank()) {
                                     Text("Teacher: ${report.teacherRemarks}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                if (!report.aiSummary.isNullOrBlank()) {
+                                if (!report.aiSummary.isNullOrBlank() && viewAllReports) {
                                     Surface(color = VioletSoft.copy(alpha = 0.4f), shape = RoundedCornerShape(10.dp)) {
                                         Text("AI Insight: ${report.aiSummary}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
                                     }
@@ -218,7 +280,7 @@ fun AcademicsAndReportsScreen(
                                     Text("Principal: ${report.headteacherRemarks}", style = MaterialTheme.typography.bodySmall, color = CobaltBlue)
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    if (report.status == ReportStatus.DRAFT.name || report.status == ReportStatus.RETURNED.name) {
+                                    if (canFillSubmit && (report.status == ReportStatus.DRAFT.name || report.status == ReportStatus.RETURNED.name)) {
                                         FilledTonalButton(
                                             onClick = {
                                                 viewModel.reviewReportCard(school.id, report, ReportStatus.SUBMITTED, "", workspace.activeRole)
@@ -226,13 +288,13 @@ fun AcademicsAndReportsScreen(
                                             modifier = Modifier.minimumInteractiveComponentSize()
                                         ) { Text("Submit") }
                                     }
-                                    if (report.status == ReportStatus.SUBMITTED.name) {
+                                    if (canApprovePublish && report.status == ReportStatus.SUBMITTED.name) {
                                         Button(
                                             onClick = { reviewTarget = report },
                                             modifier = Modifier.minimumInteractiveComponentSize()
                                         ) { Text("Review & Approve") }
                                     }
-                                    if (report.status == ReportStatus.APPROVED.name) {
+                                    if (canApprovePublish && report.status == ReportStatus.APPROVED.name) {
                                         Button(
                                             onClick = {
                                                 viewModel.reviewReportCard(school.id, report, ReportStatus.PUBLISHED, report.headteacherRemarks ?: "", workspace.activeRole)
@@ -260,6 +322,7 @@ fun AcademicsAndReportsScreen(
             }
 
             "Templates" -> {
+                val canManageTemplates = role.has(RoleCapability.MANAGE_REPORT_TEMPLATES)
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
@@ -267,14 +330,21 @@ fun AcademicsAndReportsScreen(
                 ) {
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("School Report Templates", style = MaterialTheme.typography.titleLarge)
-                            FilledTonalButton(
-                                onClick = { showNewTemplateDialog = true },
-                                modifier = Modifier.minimumInteractiveComponentSize()
-                            ) {
-                                Icon(Icons.Rounded.UploadFile, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("New Template")
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("School Report Templates", style = MaterialTheme.typography.titleLarge)
+                                if (!canManageTemplates) {
+                                    Text("Read-only template reference for ${role.shortTitle}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            if (canManageTemplates) {
+                                FilledTonalButton(
+                                    onClick = { showNewTemplateDialog = true },
+                                    modifier = Modifier.minimumInteractiveComponentSize()
+                                ) {
+                                    Icon(Icons.Rounded.UploadFile, contentDescription = null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("New Template")
+                                }
                             }
                         }
                     }

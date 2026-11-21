@@ -22,16 +22,24 @@ fun PeopleAndLeaveScreen(
     viewModel: GsmsViewModel
 ) {
     val school = workspace.activeSchool ?: return
-    val tabs = remember(school.enabledModules) {
-        buildList {
-            add("Students")
-            if (school.hasModule(GsmsModule.HR_STAFF)) add("Staff & Faculty")
-            if (school.hasModule(GsmsModule.LEAVE_MANAGEMENT)) add("Leave Workflow")
-        }
+    val role = workspace.activeRole
+    val tabs = remember(role, school.enabledModules) {
+        RolePolicy.peopleSubTabs(role, school)
     }
     var selectedTab by remember(tabs) { mutableIntStateOf(0) }
     var showEnrollDialog by remember { mutableStateOf(false) }
     var showApplyLeaveDialog by remember { mutableStateOf(false) }
+
+    if (tabs.isEmpty()) {
+        Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
+            EmptyStateCard(
+                Icons.Rounded.Lock,
+                "People & HR Restricted",
+                "${role.shortTitle} does not have directory or HR access."
+            )
+        }
+        return
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = selectedTab.coerceIn(0, tabs.lastIndex)) {
@@ -42,6 +50,8 @@ fun PeopleAndLeaveScreen(
 
         when (tabs.getOrNull(selectedTab)) {
             "Students" -> {
+                val canEnroll = role.has(RoleCapability.ENROLL_STUDENT) && school.hasModule(GsmsModule.ADMISSIONS)
+                val showFeeBalances = role == PortalRole.SUPER_ADMIN || role == PortalRole.SCHOOL_ADMIN || role == PortalRole.ADMISSIONS_RECEPTION
                 val filtered = workspace.students.filter {
                     searchQuery.isBlank() || it.fullName.contains(searchQuery, true) || it.className.contains(searchQuery, true)
                 }
@@ -56,7 +66,7 @@ fun PeopleAndLeaveScreen(
                                 Text("Students Directory", style = MaterialTheme.typography.titleLarge)
                                 Text("${filtered.size} active records", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            if (school.hasModule(GsmsModule.ADMISSIONS)) {
+                            if (canEnroll) {
                                 Button(
                                     onClick = { showEnrollDialog = true },
                                     modifier = Modifier.minimumInteractiveComponentSize().testTag("enroll_student_button")
@@ -81,7 +91,11 @@ fun PeopleAndLeaveScreen(
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("Avg: ${st.averageScore}%", style = MaterialTheme.typography.labelMedium, color = CobaltBlue)
                                     Text("Att: ${st.attendanceRate}%", style = MaterialTheme.typography.labelMedium, color = EmeraldTeal)
-                                    Text("Fee Bal: $${st.feeBalanceUsd.toInt()}", style = MaterialTheme.typography.labelMedium, color = if (st.feeBalanceUsd > 0) WarmAmber else EmeraldTeal)
+                                    if (showFeeBalances) {
+                                        Text("Fee Bal: $${st.feeBalanceUsd.toInt()}", style = MaterialTheme.typography.labelMedium, color = if (st.feeBalanceUsd > 0) WarmAmber else EmeraldTeal)
+                                    } else {
+                                        Text("Welfare: ${st.welfareStatus}", style = MaterialTheme.typography.labelMedium, color = CobaltBlue)
+                                    }
                                 }
                                 Text("Parent: ${st.parentName} • Welfare: ${st.welfareStatus}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -91,6 +105,7 @@ fun PeopleAndLeaveScreen(
             }
 
             "Staff & Faculty" -> {
+                val showLeaveBalances = role != PortalRole.TEACHER
                 val filteredStaff = workspace.staff.filter {
                     searchQuery.isBlank() || it.fullName.contains(searchQuery, true) || it.department.contains(searchQuery, true)
                 }
@@ -122,11 +137,13 @@ fun PeopleAndLeaveScreen(
                                     "Subjects: ${member.subjectsSummary ?: "-"} • Workload: ${member.workloadHours}h/wk",
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                                Text(
-                                    "Leave Balance: ${member.leaveBalanceDays} days left • Used: ${member.leaveUsedDays} days",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                                if (showLeaveBalances) {
+                                    Text(
+                                        "Leave Balance: ${member.leaveBalanceDays} days left • Used: ${member.leaveUsedDays} days",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
                     }
@@ -134,6 +151,8 @@ fun PeopleAndLeaveScreen(
             }
 
             "Leave Workflow" -> {
+                val canApplyLeave = role.has(RoleCapability.APPLY_LEAVE)
+                val canApproveLeave = role.has(RoleCapability.APPROVE_LEAVE)
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
@@ -143,15 +162,25 @@ fun PeopleAndLeaveScreen(
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("Leave Requests & Approvals", style = MaterialTheme.typography.titleLarge)
-                                Text("Approving auto-marks staff On Leave & deducts balance", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    if (canApproveLeave) {
+                                        "Approving auto-marks staff On Leave & deducts balance"
+                                    } else {
+                                        "Submit leave requests for HR / Principal approval"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                            Button(
-                                onClick = { showApplyLeaveDialog = true },
-                                modifier = Modifier.minimumInteractiveComponentSize().testTag("apply_leave_button")
-                            ) {
-                                Icon(Icons.Rounded.EventAvailable, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Apply")
+                            if (canApplyLeave) {
+                                Button(
+                                    onClick = { showApplyLeaveDialog = true },
+                                    modifier = Modifier.minimumInteractiveComponentSize().testTag("apply_leave_button")
+                                ) {
+                                    Icon(Icons.Rounded.EventAvailable, contentDescription = null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Apply")
+                                }
                             }
                         }
                     }
@@ -177,7 +206,7 @@ fun PeopleAndLeaveScreen(
                                         Text("AI Schedule Impact: ${lv.aiConflictNote}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
                                     }
                                 }
-                                if (lv.status == LeaveStatus.PENDING.name) {
+                                if (lv.status == LeaveStatus.PENDING.name && canApproveLeave) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Button(
                                             onClick = {
