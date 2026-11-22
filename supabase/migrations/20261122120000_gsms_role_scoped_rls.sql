@@ -287,7 +287,7 @@ with check (
 
 create policy "gsms_schools_owner_delete" on public.gsms_schools
 for delete to authenticated
-using (supabase_owner_uid = (select auth.uid()));
+using (public.gsms_is_school_owner(id));
 
 -- BRANCHES: all assigned members may read; only owner/school admin may change them.
 drop policy if exists "gsms_branches_tenant_isolation" on public.gsms_branches;
