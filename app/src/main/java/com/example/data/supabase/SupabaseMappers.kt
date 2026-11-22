@@ -180,7 +180,8 @@ fun SbFinanceRow.toDomain(): FinanceEntry = FinanceEntry(
     category = category,
     amountUsd = amountUsd,
     paidUsd = paidUsd,
-    status = status
+    status = status,
+    studentId = studentId
 )
 
 fun SbLeaveRow.toDomain(): LeaveRequest = LeaveRequest(
