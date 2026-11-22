@@ -53,7 +53,14 @@ enum class RoleCapability {
     MANAGE_MODULES,
     UPDATE_ACADEMIC_PERIOD,
     MANAGE_BRANCHES,
-    MANAGE_USER_PERMISSIONS
+    MANAGE_USER_PERMISSIONS,
+    MODERATE_EXAMS,
+    MANAGE_PROCUREMENT,
+    MANAGE_INVENTORY,
+    MANAGE_ICT,
+    MANAGE_COUNSELLING,
+    MANAGE_HEALTH,
+    MANAGE_ADMISSIONS
 }
 
 object RolePolicy {
@@ -204,20 +211,23 @@ object RolePolicy {
             RoleCapability.VIEW_ALERTS,
             RoleCapability.MANAGE_ALERTS,
             RoleCapability.VIEW_COMMUNICATIONS,
-            RoleCapability.COMPOSE_COMMUNICATIONS
+            RoleCapability.COMPOSE_COMMUNICATIONS,
+            RoleCapability.MANAGE_HEALTH
         ),
         PortalRole.ADMISSIONS_RECEPTION to setOf(
             RoleCapability.VIEW_ALL_STUDENTS,
             RoleCapability.ENROLL_STUDENT,
             RoleCapability.EDIT_OPERATIONS,
             RoleCapability.VIEW_COMMUNICATIONS,
-            RoleCapability.COMPOSE_COMMUNICATIONS
+            RoleCapability.COMPOSE_COMMUNICATIONS,
+            RoleCapability.MANAGE_ADMISSIONS
         ),
         PortalRole.DEPUTY_HEADTEACHER to setOf(
             RoleCapability.VIEW_ACADEMICS, RoleCapability.EDIT_ACADEMICS,
             RoleCapability.VIEW_ATTENDANCE, RoleCapability.MARK_ATTENDANCE,
             RoleCapability.VIEW_ALL_REPORT_CARDS, RoleCapability.APPROVE_PUBLISH_REPORT_CARDS,
             RoleCapability.VIEW_REPORT_TEMPLATES, RoleCapability.VIEW_ALL_STUDENTS,
+            RoleCapability.MODERATE_EXAMS,
             RoleCapability.VIEW_STAFF_DIRECTORY, RoleCapability.VIEW_LEAVE_WORKFLOW,
             RoleCapability.VIEW_ALERTS, RoleCapability.MANAGE_ALERTS,
             RoleCapability.VIEW_COMMUNICATIONS, RoleCapability.COMPOSE_COMMUNICATIONS
@@ -232,29 +242,33 @@ object RolePolicy {
         PortalRole.PROCUREMENT_OFFICER to setOf(
             RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_ALERTS,
             RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_ANALYTICS_CHARTS,
-            RoleCapability.VIEW_COMMUNICATIONS, RoleCapability.COMPOSE_COMMUNICATIONS
+            RoleCapability.VIEW_COMMUNICATIONS, RoleCapability.COMPOSE_COMMUNICATIONS,
+            RoleCapability.MANAGE_PROCUREMENT
         ),
         PortalRole.STOREKEEPER to setOf(
             RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_ALERTS,
-            RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_ANALYTICS_CHARTS
+            RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_ANALYTICS_CHARTS,
+            RoleCapability.MANAGE_PROCUREMENT, RoleCapability.MANAGE_INVENTORY
         ),
         PortalRole.EXAMINATION_OFFICER to setOf(
             RoleCapability.VIEW_ACADEMICS, RoleCapability.EDIT_ACADEMICS,
             RoleCapability.VIEW_ATTENDANCE, RoleCapability.VIEW_ALL_REPORT_CARDS,
             RoleCapability.FILL_SUBMIT_REPORT_CARDS, RoleCapability.VIEW_REPORT_TEMPLATES,
             RoleCapability.MANAGE_REPORT_TEMPLATES, RoleCapability.VIEW_ANALYTICS_CHARTS,
-            RoleCapability.VIEW_ALERTS, RoleCapability.VIEW_COMMUNICATIONS
+            RoleCapability.VIEW_ALERTS, RoleCapability.VIEW_COMMUNICATIONS,
+            RoleCapability.MODERATE_EXAMS
         ),
         PortalRole.SCHOOL_COUNSELLOR to setOf(
             RoleCapability.VIEW_ALL_STUDENTS, RoleCapability.VIEW_ATTENDANCE,
             RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_ALERTS,
             RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_COMMUNICATIONS,
-            RoleCapability.COMPOSE_COMMUNICATIONS
+            RoleCapability.COMPOSE_COMMUNICATIONS, RoleCapability.MANAGE_COUNSELLING
         ),
         PortalRole.ICT_ADMIN to setOf(
             RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_AUDIT_LOGS,
             RoleCapability.VIEW_ALERTS, RoleCapability.MANAGE_ALERTS,
-            RoleCapability.VIEW_ANALYTICS_CHARTS
+            RoleCapability.VIEW_ANALYTICS_CHARTS,
+            RoleCapability.MANAGE_ICT, RoleCapability.MANAGE_USER_PERMISSIONS
         )
     )
 
@@ -329,24 +343,24 @@ object RolePolicy {
         val allowedByRole: Set<String> = when (role) {
             PortalRole.SUPER_ADMIN,
             PortalRole.SCHOOL_ADMIN -> setOf(
-                "Finance", "Library", "Transport", "Welfare",
-                "Discipline", "Assets", "Hostel", "Admissions", "Events"
+                "Finance", "Procurement", "Stores", "Library", "Transport", "Welfare",
+                "Counselling", "Discipline", "Assets", "Hostel", "Front Desk", "Admissions", "Events", "Examinations", "ICT Systems"
             )
             PortalRole.HEADTEACHER,
-            PortalRole.DEPUTY_HEADTEACHER -> setOf("Welfare", "Discipline", "Admissions", "Events")
+            PortalRole.DEPUTY_HEADTEACHER -> setOf("Welfare", "Counselling", "Discipline", "Admissions", "Events", "Examinations")
             PortalRole.CLASS_TEACHER -> emptySet()
-            PortalRole.PROCUREMENT_OFFICER -> setOf("Procurement")
-            PortalRole.STOREKEEPER -> setOf("Stores")
+            PortalRole.PROCUREMENT_OFFICER -> setOf("Procurement", "Stores")
+            PortalRole.STOREKEEPER -> setOf("Procurement", "Stores")
             PortalRole.EXAMINATION_OFFICER -> setOf("Examinations")
-            PortalRole.SCHOOL_COUNSELLOR -> setOf("Counselling", "Welfare", "Discipline")
-            PortalRole.ICT_ADMIN -> setOf("ICT")
-            PortalRole.FINANCE_OFFICER -> setOf("Finance")
+            PortalRole.SCHOOL_COUNSELLOR -> setOf("Welfare", "Counselling", "Discipline")
+            PortalRole.ICT_ADMIN -> setOf("Stores", "ICT Systems")
+            PortalRole.FINANCE_OFFICER -> setOf("Finance", "Procurement")
             PortalRole.PARENT -> setOf("Finance")
             PortalRole.HR_MANAGER -> setOf("Finance")
             PortalRole.LIBRARIAN -> setOf("Library")
             PortalRole.TRANSPORT_MANAGER -> setOf("Transport")
-            PortalRole.WELFARE_NURSE -> setOf("Welfare", "Discipline", "Hostel")
-            PortalRole.ADMISSIONS_RECEPTION -> setOf("Admissions", "Events")
+            PortalRole.WELFARE_NURSE -> setOf("Welfare", "Counselling", "Discipline", "Hostel")
+            PortalRole.ADMISSIONS_RECEPTION -> setOf("Front Desk", "Admissions", "Events")
             PortalRole.TEACHER,
             PortalRole.STUDENT -> emptySet()
             else -> emptySet()
@@ -355,18 +369,29 @@ object RolePolicy {
             if ("Finance" in allowedByRole && school.hasModule(GsmsModule.FINANCE)) add("Finance")
             if ("Procurement" in allowedByRole && school.hasModule(GsmsModule.PROCUREMENT)) add("Procurement")
             if ("Stores" in allowedByRole && school.hasModule(GsmsModule.INVENTORY_ASSETS)) add("Stores")
-            if ("Examinations" in allowedByRole && school.hasModule(GsmsModule.EXAMS)) add("Examinations")
-            if ("Counselling" in allowedByRole && school.hasModule(GsmsModule.DISCIPLINE)) add("Counselling")
-            if ("ICT" in allowedByRole && school.hasModule(GsmsModule.ICT_SYSTEMS)) add("ICT")
             if ("Library" in allowedByRole && school.hasModule(GsmsModule.LIBRARY)) add("Library")
             if ("Transport" in allowedByRole && school.hasModule(GsmsModule.TRANSPORT)) add("Transport")
             if ("Welfare" in allowedByRole && school.hasModule(GsmsModule.HEALTH_WELFARE)) add("Welfare")
+            if ("Counselling" in allowedByRole && school.hasModule(GsmsModule.DISCIPLINE)) add("Counselling")
             if ("Discipline" in allowedByRole && school.hasModule(GsmsModule.DISCIPLINE)) add("Discipline")
             if ("Assets" in allowedByRole && school.hasModule(GsmsModule.INVENTORY_ASSETS)) add("Assets")
             if ("Hostel" in allowedByRole && school.hasModule(GsmsModule.HOSTEL_BOARDING)) add("Hostel")
+            if ("Front Desk" in allowedByRole && school.hasModule(GsmsModule.ADMISSIONS)) add("Front Desk")
             if ("Admissions" in allowedByRole && school.hasModule(GsmsModule.ADMISSIONS)) add("Admissions")
             if ("Events" in allowedByRole && school.hasModule(GsmsModule.EVENTS)) add("Events")
+            if ("Examinations" in allowedByRole && school.hasModule(GsmsModule.EXAMS)) add("Examinations")
+            if ("ICT Systems" in allowedByRole && school.hasModule(GsmsModule.ICT_SYSTEMS)) add("ICT Systems")
         }
+    }
+
+    fun operationSections(role: PortalRole, school: School?, extra: Set<RoleCapability>): List<String> {
+        val base = operationSections(role, school).toMutableList()
+        if (school == null) return emptyList()
+        if (RoleCapability.MANAGE_PROCUREMENT in extra && school.hasModule(GsmsModule.PROCUREMENT) && "Procurement" !in base) base.add("Procurement")
+        if (RoleCapability.MANAGE_INVENTORY in extra && school.hasModule(GsmsModule.INVENTORY_ASSETS) && "Stores" !in base) base.add("Stores")
+        if (RoleCapability.MANAGE_ICT in extra && school.hasModule(GsmsModule.ICT_SYSTEMS) && "ICT Systems" !in base) base.add("ICT Systems")
+        if (RoleCapability.MODERATE_EXAMS in extra && school.hasModule(GsmsModule.EXAMS) && "Examinations" !in base) base.add("Examinations")
+        return base
     }
 
     fun analyticsSubTabs(role: PortalRole, school: School?): List<String> {
@@ -414,7 +439,7 @@ object RolePolicy {
             add(GsmsTab.DASHBOARD)
             if (academicSubTabs(role, school).isNotEmpty() || RoleCapability.VIEW_ACADEMICS in extra) add(GsmsTab.ACADEMICS)
             if (peopleSubTabs(role, school).isNotEmpty() || RoleCapability.VIEW_ALL_STUDENTS in extra || RoleCapability.VIEW_STAFF_DIRECTORY in extra) add(GsmsTab.PEOPLE)
-            if (operationSections(role, school).isNotEmpty() || RoleCapability.EDIT_OPERATIONS in extra || RoleCapability.VIEW_FINANCE_ALL in extra) add(GsmsTab.OPERATIONS)
+            if (operationSections(role, school, extra).isNotEmpty() || RoleCapability.EDIT_OPERATIONS in extra || RoleCapability.VIEW_FINANCE_ALL in extra) add(GsmsTab.OPERATIONS)
             if (analyticsSubTabs(role, school, extra).isNotEmpty()) add(GsmsTab.ANALYTICS)
             add(GsmsTab.AI_GOVERNANCE)
         }
@@ -552,7 +577,7 @@ val RoleCapability.category: String
         RoleCapability.APPLY_LEAVE, RoleCapability.APPROVE_LEAVE -> "People & HR"
         RoleCapability.VIEW_FINANCE_ALL, RoleCapability.VIEW_PAYROLL_ONLY,
         RoleCapability.VIEW_OWN_INVOICES_ONLY, RoleCapability.RECORD_FINANCE_PAYMENT,
-        RoleCapability.EDIT_OPERATIONS -> "Operations & Finance"
+        RoleCapability.EDIT_OPERATIONS, RoleCapability.MODERATE_EXAMS, RoleCapability.MANAGE_PROCUREMENT, RoleCapability.MANAGE_INVENTORY, RoleCapability.MANAGE_ICT, RoleCapability.MANAGE_COUNSELLING, RoleCapability.MANAGE_HEALTH, RoleCapability.MANAGE_ADMISSIONS -> "Operations & Finance"
         RoleCapability.VIEW_ANALYTICS_CHARTS, RoleCapability.VIEW_ALERTS,
         RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_COMMUNICATIONS,
         RoleCapability.COMPOSE_COMMUNICATIONS, RoleCapability.VIEW_AUDIT_LOGS -> "Analytics & Communications"
