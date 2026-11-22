@@ -513,6 +513,32 @@ object RolePolicy {
         else -> students
     }
 
+    fun filterAcademicsForRole(
+        role: PortalRole,
+        records: List<AcademicRecord>,
+        assignedClasses: List<String>,
+        assignedSubjects: List<String>
+    ): List<AcademicRecord> {
+        if (role != PortalRole.TEACHER && role != PortalRole.CLASS_TEACHER) return records
+        return records.filter { record ->
+            (assignedClasses.isEmpty() || record.className in assignedClasses) &&
+                (assignedSubjects.isEmpty() || record.subjectName in assignedSubjects)
+        }
+    }
+
+    fun filterReportCardsForRole(
+        role: PortalRole,
+        reports: List<ReportCard>,
+        linkedStudents: List<Student>
+    ): List<ReportCard> {
+        if (role != PortalRole.PARENT && role != PortalRole.STUDENT) return reports
+        val linkedIds = linkedStudents.map { it.id }.filter { it.isNotBlank() }.toSet()
+        if (linkedIds.isEmpty()) return emptyList()
+        return reports.filter {
+            it.studentId in linkedIds && it.status.equals(ReportStatus.PUBLISHED.name, ignoreCase = true)
+        }
+    }
+
     fun filterAlertsForRole(role: PortalRole, alerts: List<EarlyWarningAlert>): List<EarlyWarningAlert> {
         return when (role) {
             PortalRole.SUPER_ADMIN,
