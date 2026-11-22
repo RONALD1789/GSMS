@@ -331,7 +331,7 @@ class SupabaseWorkspaceController(
             id = newId("att"), schoolId = school.id, branchId = branchId,
             academicYear = school.activeAcademicYear, term = school.activeTerm,
             ownerId = userId, targetType = "STUDENT", targetName = student.fullName,
-            className = student.className, dateIso = "2026-11-21", status = status
+            studentId = student.id, className = student.className, dateIso = "2026-11-21", status = status
         )
         supabase.saveAttendance(record, userId, school.id).getOrThrow()
         mutateSuccess { ws -> ws.copy(attendance = listOf(record) + ws.attendance) }
