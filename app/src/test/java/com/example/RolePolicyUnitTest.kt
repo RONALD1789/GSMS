@@ -57,7 +57,7 @@ class RolePolicyUnitTest {
             Student(id = "stu_1", fullName = "Maya Lin", className = "Grade 10A"),
             Student(id = "stu_3", fullName = "Amina Yusuf", className = "Grade 11B")
         )
-        val scopedStudents = RolePolicy.filterStudentsForRole(PortalRole.TEACHER, students, listOf("Grade 10A"))
+        val scopedStudents = RolePolicy.filterStudentsForRole(PortalRole.TEACHER, students, assignedClasses = listOf("Grade 10A"), linkedStudentIds = emptyList())
         assertEquals(1, scopedStudents.size)
         assertEquals("stu_1", scopedStudents.first().id)
 
@@ -96,7 +96,7 @@ class RolePolicyUnitTest {
 
         val linkedChild = Student(id = "stu_1", fullName = "Maya Lin", parentName = "Wei Lin", className = "Grade 10A")
         val allStudents = listOf(linkedChild, Student(id = "stu_2", fullName = "Liam O'Connor", parentName = "Claire O'Connor", className = "Grade 10A"))
-        val filteredChildren = RolePolicy.filterStudentsForRole(PortalRole.PARENT, allStudents, linkedStudentIds = listOf("stu_1"))
+        val filteredChildren = RolePolicy.filterStudentsForRole(PortalRole.PARENT, allStudents, assignedClasses = emptyList(), linkedStudentIds = listOf("stu_1"))
         assertEquals(listOf("stu_1"), filteredChildren.map { it.id })
 
         val financeEntries = listOf(
@@ -104,7 +104,7 @@ class RolePolicyUnitTest {
             FinanceEntry(id = "2", entryType = "INVOICE", partyName = "Claire O'Connor", title = "Term 1 Tuition - Liam O'Connor", studentId = "stu_2"),
             FinanceEntry(id = "3", entryType = "PAYROLL", partyName = "Dr. Samuel")
         )
-        val parentFinance = RolePolicy.filterFinanceForRole(PortalRole.PARENT, financeEntries, filteredChildren)
+        val parentFinance = RolePolicy.filterFinanceForRole(PortalRole.PARENT, financeEntries, filteredChildren.firstOrNull())
         assertEquals(1, parentFinance.size)
         assertEquals("Wei Lin", parentFinance.first().partyName)
 
