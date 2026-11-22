@@ -148,21 +148,7 @@ as $$
      and public.gsms_can_access_class(target_school_id, target_class_name);
 $$;
 
-create or replace function public.gsms_can_access_student_in_branch(
-  target_school_id text,
-  target_branch_id text,
-  target_student_id text,
-  target_class_name text
-)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select public.gsms_can_access_branch(target_school_id, target_branch_id)
-     and public.gsms_can_access_student(target_school_id, target_student_id, target_class_name);
-$$;
+
 
 create or replace function public.gsms_can_access_student(
   target_school_id text,
@@ -191,6 +177,22 @@ as $$
         and upper(a.primary_role) in ('PARENT', 'STUDENT')
         and target_student_id = any(a.linked_student_ids)
     );
+$$;
+
+create or replace function public.gsms_can_access_student_in_branch(
+  target_school_id text,
+  target_branch_id text,
+  target_student_id text,
+  target_class_name text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.gsms_can_access_branch(target_school_id, target_branch_id)
+     and public.gsms_can_access_student(target_school_id, target_student_id, target_class_name);
 $$;
 
 create or replace function public.gsms_can_read_report(
