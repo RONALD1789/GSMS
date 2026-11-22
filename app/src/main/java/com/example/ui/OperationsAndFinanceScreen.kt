@@ -413,3 +413,59 @@ fun OperationsAndFinanceScreen(
         )
     }
 }
+
+@Composable
+private fun FinanceInvoiceDialog(
+    students: List<Student>,
+    onDismiss: () -> Unit,
+    onCreate: (Student, String, String, Double) -> Unit
+) {
+    var selectedStudent by remember(students) { mutableStateOf(students.firstOrNull()) }
+    var studentMenuExpanded by remember { mutableStateOf(false) }
+    var title by remember { mutableStateOf("School Fees Invoice") }
+    var category by remember { mutableStateOf("Tuition") }
+    var amount by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Create Fee Invoice") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box {
+                    OutlinedButton(
+                        onClick = { studentMenuExpanded = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = students.isNotEmpty()
+                    ) {
+                        Text(selectedStudent?.let { "${it.fullName} • ${it.className}" } ?: "No learners available")
+                    }
+                    DropdownMenu(
+                        expanded = studentMenuExpanded,
+                        onDismissRequest = { studentMenuExpanded = false }
+                    ) {
+                        students.forEach { student ->
+                            DropdownMenuItem(
+                                text = { Text("${student.fullName} • ${student.className}") },
+                                onClick = {
+                                    selectedStudent = student
+                                    studentMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Invoice Description") }, singleLine = true)
+                OutlinedTextField(value = category, onValueChange = { category = it }, label = { Text("Fee Category") }, singleLine = true)
+                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount (USD)") }, singleLine = true)
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = selectedStudent != null && title.isNotBlank() && (amount.toDoubleOrNull() ?: 0.0) > 0.0,
+                onClick = {
+                    selectedStudent?.let { onCreate(it, title, category, amount.toDoubleOrNull() ?: 0.0) }
+                }
+            ) { Text("Create Invoice") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
