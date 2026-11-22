@@ -1027,34 +1027,72 @@ create policy "gsms_operations_manager_delete" on public.gsms_operations
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- ALERTS: sensitive risk/welfare data is restricted to school leadership.
+-- ALERTS: visibility and resolution are limited by role and alert category.
+create or replace function public.gsms_can_read_alert(target_school_id text, target_category text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.gsms_is_school_manager(target_school_id)
+    or public.gsms_has_any_role(target_school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER'])
+    or (upper(target_category) in ('ACADEMIC', 'ATTENDANCE', 'BEHAVIOR') and public.gsms_has_any_role(target_school_id, array['TEACHER', 'CLASS_TEACHER']))
+    or (upper(target_category) = 'FINANCE' and public.gsms_has_any_role(target_school_id, array['FINANCE_OFFICER']))
+    or (upper(target_category) = 'STAFFING' and public.gsms_has_any_role(target_school_id, array['HR_MANAGER']))
+    or (upper(target_category) in ('WELFARE', 'ATTENDANCE', 'BEHAVIOR') and public.gsms_has_any_role(target_school_id, array['WELFARE_NURSE']))
+    or (upper(target_category) in ('TRANSPORT', 'ATTENDANCE') and public.gsms_has_any_role(target_school_id, array['TRANSPORT_MANAGER']))
+    or (upper(target_category) in ('PROCUREMENT', 'FINANCE', 'STOCK') and public.gsms_has_any_role(target_school_id, array['PROCUREMENT_OFFICER']))
+    or (upper(target_category) in ('STOCK', 'ASSET', 'PROCUREMENT') and public.gsms_has_any_role(target_school_id, array['STOREKEEPER']))
+    or (upper(target_category) in ('ACADEMIC', 'EXAM', 'ATTENDANCE') and public.gsms_has_any_role(target_school_id, array['EXAMINATION_OFFICER']))
+    or (upper(target_category) in ('WELFARE', 'ATTENDANCE', 'BEHAVIOR', 'SAFEGUARDING') and public.gsms_has_any_role(target_school_id, array['SCHOOL_COUNSELLOR']))
+    or (upper(target_category) in ('ICT', 'SYSTEM', 'SECURITY') and public.gsms_has_any_role(target_school_id, array['ICT_ADMIN']));
+$$;
+
+create or replace function public.gsms_can_manage_alert(target_school_id text, target_category text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.gsms_is_school_manager(target_school_id)
+    or public.gsms_has_any_role(target_school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER'])
+    or (upper(target_category) in ('ACADEMIC', 'ATTENDANCE', 'BEHAVIOR') and public.gsms_has_any_role(target_school_id, array['TEACHER', 'CLASS_TEACHER']))
+    or (upper(target_category) = 'FINANCE' and public.gsms_has_any_role(target_school_id, array['FINANCE_OFFICER']))
+    or (upper(target_category) = 'STAFFING' and public.gsms_has_any_role(target_school_id, array['HR_MANAGER']))
+    or (upper(target_category) in ('WELFARE', 'ATTENDANCE', 'BEHAVIOR') and public.gsms_has_any_role(target_school_id, array['WELFARE_NURSE']))
+    or (upper(target_category) in ('TRANSPORT', 'ATTENDANCE') and public.gsms_has_any_role(target_school_id, array['TRANSPORT_MANAGER']))
+    or (upper(target_category) in ('PROCUREMENT', 'FINANCE', 'STOCK') and public.gsms_has_any_role(target_school_id, array['PROCUREMENT_OFFICER']))
+    or (upper(target_category) in ('STOCK', 'ASSET', 'PROCUREMENT') and public.gsms_has_any_role(target_school_id, array['STOREKEEPER']))
+    or (upper(target_category) in ('WELFARE', 'ATTENDANCE', 'BEHAVIOR', 'SAFEGUARDING') and public.gsms_has_any_role(target_school_id, array['SCHOOL_COUNSELLOR']))
+    or (upper(target_category) in ('ICT', 'SYSTEM', 'SECURITY') and public.gsms_has_any_role(target_school_id, array['ICT_ADMIN']));
+$$;
+
+revoke all on function public.gsms_can_read_alert(text, text) from public, anon;
+revoke all on function public.gsms_can_manage_alert(text, text) from public, anon;
+grant execute on function public.gsms_can_read_alert(text, text) to authenticated;
+grant execute on function public.gsms_can_manage_alert(text, text) to authenticated;
+
 drop policy if exists "gsms_early_warning_alerts_tenant_isolation" on public.gsms_early_warning_alerts;
-create policy "gsms_alerts_leadership_select" on public.gsms_early_warning_alerts
+drop policy if exists "gsms_alerts_leadership_select" on public.gsms_early_warning_alerts;
+drop policy if exists "gsms_alerts_leadership_insert" on public.gsms_early_warning_alerts;
+drop policy if exists "gsms_alerts_leadership_update" on public.gsms_early_warning_alerts;
+drop policy if exists "gsms_alerts_manager_delete" on public.gsms_early_warning_alerts;
+create policy "gsms_alerts_role_scoped_select" on public.gsms_early_warning_alerts
 for select to authenticated
-using (
-  (public.gsms_is_school_manager(school_id)
-    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
-  and public.gsms_can_access_branch(school_id, branch_id)
-);
-create policy "gsms_alerts_leadership_insert" on public.gsms_early_warning_alerts
+using (public.gsms_can_read_alert(school_id, category)
+  and public.gsms_can_access_branch(school_id, branch_id));
+create policy "gsms_alerts_role_scoped_insert" on public.gsms_early_warning_alerts
 for insert to authenticated
-with check (
-  (public.gsms_is_school_manager(school_id)
-    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
-  and public.gsms_can_access_branch(school_id, branch_id)
-);
-create policy "gsms_alerts_leadership_update" on public.gsms_early_warning_alerts
+with check (public.gsms_can_manage_alert(school_id, category)
+  and public.gsms_can_access_branch(school_id, branch_id));
+create policy "gsms_alerts_role_scoped_update" on public.gsms_early_warning_alerts
 for update to authenticated
-using (
-  (public.gsms_is_school_manager(school_id)
-    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
-  and public.gsms_can_access_branch(school_id, branch_id)
-)
-with check (
-  (public.gsms_is_school_manager(school_id)
-    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
-  and public.gsms_can_access_branch(school_id, branch_id)
-);
+using (public.gsms_can_manage_alert(school_id, category)
+  and public.gsms_can_access_branch(school_id, branch_id))
+with check (public.gsms_can_manage_alert(school_id, category)
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_alerts_manager_delete" on public.gsms_early_warning_alerts
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
