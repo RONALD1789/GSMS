@@ -616,7 +616,7 @@ private fun RoleDashboardOverview(
         )
     }
     val actions = buildList<Pair<String, () -> Unit>> {
-        if (RolePolicy.academicSubTabs(role, workspace.activeSchool).isNotEmpty()) add("Academics & Reports" to { onNavigateToTab(GsmsTab.ACADEMICS) })
+        if (RolePolicy.academicSubTabs(role, workspace.activeSchool, workspace.activeExtraCapabilities).isNotEmpty()) add("Academics & Reports" to { onNavigateToTab(GsmsTab.ACADEMICS) })
         if (RolePolicy.operationSections(role, workspace.activeSchool).isNotEmpty()) add("My Work Queue" to { onNavigateToTab(GsmsTab.OPERATIONS) })
         if (RolePolicy.peopleSubTabs(role, workspace.activeSchool).isNotEmpty()) add("People & Classes" to { onNavigateToTab(GsmsTab.PEOPLE) })
         if (RolePolicy.analyticsSubTabs(role, workspace.activeSchool, workspace.activeExtraCapabilities).isNotEmpty()) add("Alerts & Updates" to { onNavigateToTab(GsmsTab.ANALYTICS) })
