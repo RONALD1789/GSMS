@@ -8,6 +8,7 @@ import {
   Settings, ShieldCheck, Sparkles, Users, Wallet, X
 } from "lucide-react";
 import { supabase, supabaseConfigured } from "./lib/supabase";
+import ModuleWorkspace from "./components/ModuleWorkspace";
 
 type Assignment = Record<string, unknown> & {
   id?: string; school_id?: string; primary_role?: string; email?: string;
@@ -166,7 +167,7 @@ export default function App() {
           <div className="stat-grid"><article className="stat-card"><div className="stat-top"><span>Assigned school</span><span className="stat-icon blue"><GraduationCap size={18}/></span></div><strong className="stat-value stat-text">{schoolName}</strong><small>Current tenant workspace</small></article><article className="stat-card"><div className="stat-top"><span>Active role</span><span className="stat-icon purple"><ShieldCheck size={18}/></span></div><strong className="stat-value stat-text">{roleLabel(role)}</strong><small>Permission-scoped portal</small></article><article className="stat-card"><div className="stat-top"><span>Branch access</span><span className="stat-icon green"><Activity size={18}/></span></div><strong className="stat-value">{assignments[0]?.assigned_branch_ids?.length ?? "—"}</strong><small>Assigned branch scope</small></article><article className="stat-card"><div className="stat-top"><span>Linked learners</span><span className="stat-icon amber"><Users size={18}/></span></div><strong className="stat-value">{assignments[0]?.linked_student_ids?.length ?? "—"}</strong><small>Linked learner records</small></article></div>
           <div className="section-heading module-heading"><div><h3>Your modules</h3><p>Choose a workspace to continue.</p></div><span className="module-count">{allowedModules.length} available</span></div>
           <div className="module-grid">{allowedModules.filter(m=>m.label!=="Overview").slice(0,8).map(m=><button className="module-card" key={m.label} onClick={()=>setActivePage(m.label)}><span className="module-icon"><m.icon size={19}/></span><span><b>{m.label}</b><small>{m.group}</small></span><span className="module-arrow">↗</span></button>)}</div>
-        </>:<section className="module-page"><div className="module-page-icon">{pageModule?<pageModule.icon size={25}/>:<LifeBuoy size={25}/>}</div><span className="eyebrow dark">{pageModule?.group||"SUPPORT"}</span><h1>{activePage}</h1><p className="module-intro">This workspace is protected by your GSMS role and Supabase Row Level Security.</p><div className="module-status-card"><div className="status-symbol"><ShieldCheck size={22}/></div><div><b>{activePage} workspace is ready for integration</b><p>The portal shell, sign-in session and school access context are connected. The next implementation step is wiring this module to its verified GSMS tables and role-specific workflows. No sample records are being presented as live school data.</p></div></div><button className="secondary-btn" onClick={()=>setActivePage("Overview")}>← Back to overview</button></section>}
+        </>:<ModuleWorkspace page={activePage} schoolId={String(school?.id||"")} onBack={()=>setActivePage("Overview")}/>}
         <footer className="page-footer"><span>© {new Date().getFullYear()} GSMS · Global School Management System</span><span>Secure by design <ShieldCheck size={13}/></span></footer>
       </div>
     </main>
