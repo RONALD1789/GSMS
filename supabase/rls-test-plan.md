@@ -24,7 +24,7 @@ Also create a second branch A2, a second class P6, and a second student S2.
 | School A owner | Read/write all School A records and branches; may manage assignments and portal role override |
 | School A School Admin | Manage permitted school operations and assignments; cannot grant SUPER_ADMIN or change own assignment |
 | Headteacher | School-wide academic/report leadership access; can review and approve report cards |
-| Teacher | Students, academics, attendance and reports only in assigned branch/class; can create drafts and submit them, but cannot approve/publish |
+| Teacher | Can register and access students only in assigned branch/class; can manage class academics, attendance and reports, submit drafts, but cannot approve/publish |
 | Parent | Only linked student summaries, APPROVED/PUBLISHED reports and parent-audience communications; no internal risk/welfare fields, school revenue/subscription metrics, finance, staff, alerts or unrelated learners |
 | Finance Officer | Finance records only in assigned branch |
 | HR Manager | Staff and leave records only in assigned branch |
@@ -44,7 +44,7 @@ Also create a second branch A2, a second class P6, and a second student S2.
 
 ## Required negative tests
 
-1. Teacher assigned to P5/A1 cannot select or mutate P6/A2 records.
+1. Teacher assigned to P5/A1 can register a learner in P5/A1 but cannot register, select or mutate P6/A2 records.
 2. Teacher cannot read finance, staff, leave, alerts or access-assignment rows belonging to other users.
 3. Teacher cannot update an APPROVED/PUBLISHED report or set a report status to APPROVED/PUBLISHED.
 4. Parent cannot select another student's records or any report that is not APPROVED/PUBLISHED.
