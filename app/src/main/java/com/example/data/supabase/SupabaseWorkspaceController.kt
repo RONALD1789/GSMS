@@ -187,6 +187,30 @@ class SupabaseWorkspaceController(
         return Result.success("Active period updated to $year ($term)")
     }
 
+    private fun validateIctAssignment(role: PortalRole, permissions: List<String>): Result<String>? {
+        if (currentWorkspace()?.activeRole != PortalRole.ICT_ADMIN) return null
+        val allowedRoles = setOf(
+            PortalRole.TEACHER, PortalRole.CLASS_TEACHER, PortalRole.PARENT, PortalRole.STUDENT,
+            PortalRole.LIBRARIAN, PortalRole.TRANSPORT_MANAGER, PortalRole.WELFARE_NURSE,
+            PortalRole.ADMISSIONS_RECEPTION, PortalRole.PROCUREMENT_OFFICER, PortalRole.STOREKEEPER,
+            PortalRole.EXAMINATION_OFFICER, PortalRole.SCHOOL_COUNSELLOR
+        )
+        val allowedPermissions = setOf(
+            "VIEW_ACADEMICS", "EDIT_ACADEMICS", "VIEW_ATTENDANCE", "MARK_ATTENDANCE",
+            "VIEW_ASSIGNED_STUDENTS", "FILL_SUBMIT_REPORT_CARDS", "VIEW_OWN_PUBLISHED_REPORTS",
+            "VIEW_COMMUNICATIONS", "VIEW_ALERTS", "EDIT_OPERATIONS", "MANAGE_PROCUREMENT",
+            "MANAGE_INVENTORY", "MANAGE_ICT", "MANAGE_COUNSELLING", "MANAGE_HEALTH",
+            "MANAGE_ADMISSIONS", "MODERATE_EXAMS"
+        )
+        if (role !in allowedRoles) {
+            return Result.failure(IllegalArgumentException("ICT Admin can provision standard school roles only. School leadership and finance/HR roles must be provisioned by the School Admin or owner."))
+        }
+        if (permissions.any { it !in allowedPermissions }) {
+            return Result.failure(IllegalArgumentException("ICT Admin can delegate only approved academic, operational and ICT capabilities."))
+        }
+        return null
+    }
+
     suspend fun delegatePermissions(
         schoolId: String,
         assignment: UserAccessAssignment,
@@ -196,6 +220,7 @@ class SupabaseWorkspaceController(
         linkedStudentIds: List<String>,
         actorName: String
     ): Result<String> {
+        validateIctAssignment(assignment.resolvedRole(), extraPermissions)?.let { return it }
         val normalizedLinkedStudentIds = linkedStudentIds.distinct().take(20)
         val linkedBranchIds = if (
             assignment.resolvedRole() == PortalRole.PARENT || assignment.resolvedRole() == PortalRole.STUDENT
@@ -237,6 +262,7 @@ class SupabaseWorkspaceController(
         extraPermissions: List<String>,
         actorName: String
     ): Result<String> {
+        validateIctAssignment(primaryRole, extraPermissions)?.let { return it }
         if (primaryRole == PortalRole.SUPER_ADMIN) {
             return Result.failure(IllegalArgumentException("SUPER_ADMIN is reserved for the verified school owner."))
         }
