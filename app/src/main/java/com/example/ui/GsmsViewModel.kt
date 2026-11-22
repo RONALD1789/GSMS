@@ -338,6 +338,11 @@ class GsmsViewModel(
         launchMutation { workspaceController.addOperationRecord(school, branchId, moduleType, title, subtitle, partyName, status, metricLabel, notes) }
     }
 
+    fun updateOperationStatus(schoolId: String, operation: OperationRecord, status: String, role: PortalRole) {
+        if (!requireCapability(RoleCapability.EDIT_OPERATIONS, "update operational records", role)) return
+        launchMutation { workspaceController.updateOperationStatus(schoolId, operation, status) }
+    }
+
     fun updateAlertStatus(schoolId: String, alert: EarlyWarningAlert, status: String, role: PortalRole) {
         if (!requireCapability(RoleCapability.MANAGE_ALERTS, "update early warning alerts", role)) return
         launchMutation { workspaceController.updateAlertStatus(schoolId, alert, status) }
