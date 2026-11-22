@@ -148,6 +148,12 @@ interface SupabaseApiService {
         @Query("school_id") schoolIdFilter: String
     ): Response<List<SbParentStudentRow>>
 
+    @GET("rest/v1/gsms_admissions_student_summaries")
+    suspend fun fetchAdmissionsStudentSummaries(
+        @Query("select") select: String = "*",
+        @Query("school_id") schoolIdFilter: String
+    ): Response<List<SbStudentRow>>
+
     @GET("rest/v1/gsms_staff")
     suspend fun fetchStaff(
         @Query("select") select: String = "*",
