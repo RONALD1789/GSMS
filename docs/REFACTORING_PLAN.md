@@ -11,6 +11,7 @@ Refactor in small, reviewable steps. Each step must preserve existing behavior, 
 - [x] Document the current architecture and target boundaries.
 - [x] Move seed-data implementation into a dedicated data/seed package.
 - [x] Isolate Firestore client configuration in a dedicated Firebase data provider.
+- [x] Extract read-only Firestore snapshot streams into a focused repository while preserving the existing GsmsRepository API.
 - [ ] Run the existing unit, instrumentation and Firestore rules test suites in a configured build environment.
 - [ ] Record baseline build and test results before moving implementation files.
 
@@ -80,7 +81,7 @@ Large files identified during inspection include:
 - ui/PortalDashboards.kt (~37 KB)
 - Several feature screens between ~15 KB and ~49 KB
 
-The first code-moving increment has moved the seed-data object to data/seed and extracted Firestore client setup to data/firebase/FirestoreProvider.kt. GsmsRepository remains the compatibility facade and still owns operational Firestore queries and mutations.
+The first code-moving increment moved the seed-data object to data/seed and extracted Firestore client setup to data/firebase/FirestoreProvider.kt. A subsequent increment extracted all existing read-only snapshot stream methods into SchoolStreamsRepository.kt. GsmsRepository retains the same public observe* methods and delegates to the focused class, preserving current call sites and query constraints.
 
 The Android build has not been executed in this environment. There is no GitHub Actions workflow configured in the repository, so the changes require a local Gradle build before merge.
 
