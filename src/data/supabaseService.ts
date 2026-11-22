@@ -102,15 +102,29 @@ export async function fetchSupabaseStatus(): Promise<Partial<SupabaseSyncState>>
 
 export async function testSupabaseConnection(): Promise<{ message: string; latencyMs: number }> {
   const start = performance.now();
-  const res = await fetch('/api/supabase/proxy/rest/v1/', {
+  const authRes = await fetch('/api/supabase/proxy/auth/v1/settings', {
+    headers: { Accept: 'application/json' }
+  });
+  if (!authRes.ok) {
+    throw new Error(await parseError(authRes, 'Auth health check'));
+  }
+
+  const tableRes = await fetch('/api/supabase/proxy/rest/v1/gsms_schools?select=id&limit=1', {
     headers: buildAuthHeaders()
   });
   const latencyMs = Math.max(1, Math.round(performance.now() - start));
-  if (!res.ok) {
-    throw new Error(await parseError(res, 'Connection test'));
+
+  if (tableRes.status === 404) {
+    throw new Error(
+      `Supabase Auth reachable (${latencyMs}ms), but GSMS tables are missing. Run supabase/schema.sql in your Supabase SQL Editor.`
+    );
   }
+  if (!tableRes.ok && tableRes.status !== 401 && tableRes.status !== 403) {
+    throw new Error(await parseError(tableRes, 'PostgREST schema check'));
+  }
+
   return {
-    message: `Connected to Supabase PostgREST (${latencyMs}ms)`,
+    message: `Connected to Supabase Auth & PostgREST (${latencyMs}ms)`,
     latencyMs
   };
 }

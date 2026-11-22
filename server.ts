@@ -196,7 +196,7 @@ async function startServer() {
     const incomingAuth = req.header('authorization');
     if (incomingAuth && incomingAuth.startsWith('Bearer ')) {
       headers.Authorization = incomingAuth;
-    } else {
+    } else if (cfg.anonKey.startsWith('eyJ')) {
       headers.Authorization = `Bearer ${cfg.anonKey}`;
     }
 
