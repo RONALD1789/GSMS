@@ -544,7 +544,7 @@ object RolePolicy {
             PortalRole.SCHOOL_ADMIN,
             PortalRole.FINANCE_OFFICER -> entries
             PortalRole.HR_MANAGER -> entries.filter { it.entryType == "PAYROLL" }
-            PortalRole.PARENT, PortalRole.STUDENT -> {
+            PortalRole.PARENT -> {
                 // No learner selected means no invoices: never fall back to the whole ledger.
                 val linkedStudentId = focusStudent?.id?.takeIf { it.isNotBlank() } ?: return emptyList()
                 entries.filter { it.entryType == "INVOICE" && it.studentId == linkedStudentId }
