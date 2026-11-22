@@ -218,7 +218,7 @@ set search_path = public, pg_temp
 as $
   select
     public.gsms_is_school_manager(target_school_id)
-    or public.gsms_has_any_role(target_school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'ICT_ADMIN'])
+    or public.gsms_has_any_role(target_school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER'])
     or (
       upper(target_module_type) like '%LIBRARY%'
       and public.gsms_has_any_role(target_school_id, array['LIBRARIAN'])
@@ -250,6 +250,14 @@ as $
     or (
       upper(target_module_type) in ('EXAM', 'EXAM_TIMETABLE', 'INVIGILATION', 'MARK_MODERATION')
       and public.gsms_has_any_role(target_school_id, array['EXAMINATION_OFFICER'])
+    )
+    or (
+      upper(target_module_type) in ('ICT_TICKET', 'ICT_ASSET', 'SYSTEM_INCIDENT', 'ACCESS_REQUEST')
+      and public.gsms_has_any_role(target_school_id, array['ICT_ADMIN'])
+    )
+    or (
+      upper(target_module_type) = 'EVENT'
+      and public.gsms_has_any_role(target_school_id, array['ADMISSIONS_RECEPTION'])
     )
     or (
       upper(target_module_type) in ('PROCUREMENT', 'REQUISITION', 'PURCHASE_ORDER', 'VENDOR', 'RFQ')
