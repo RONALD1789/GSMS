@@ -544,6 +544,42 @@ class SupabaseWorkspaceController(
         return Result.success("Saved $moduleType record")
     }
 
+    suspend fun updateOperationRecord(
+        schoolId: String,
+        operation: OperationRecord,
+        title: String,
+        subtitle: String,
+        partyName: String,
+        metricLabel: String,
+        notes: String
+    ): Result<String> {
+        val updated = operation.copy(
+            title = title.trim(),
+            subtitle = subtitle.trim().ifBlank { null },
+            partyName = partyName.trim().ifBlank { null },
+            metricLabel = metricLabel.trim().ifBlank { null },
+            notes = notes.trim().ifBlank { null }
+        )
+        supabase.saveOperation(updated, userId, schoolId).getOrThrow()
+        val ws = currentWorkspace()
+        val audit = AuditLog(
+            id = newId("aud"), schoolId = schoolId, ownerId = userId,
+            actorName = ws?.userProfile?.displayName?.takeIf { it.isNotBlank() } ?: displayName,
+            actorRole = ws?.activeRole?.name.orEmpty(),
+            actionType = "OPERATION_RECORD_UPDATED",
+            moduleName = operation.moduleType,
+            summary = "Updated operational record: ${updated.title}"
+        )
+        supabase.appendAuditLog(audit, userId, schoolId)
+        mutateSuccess { state ->
+            state.copy(
+                operations = state.operations.map { if (it.id == updated.id) updated else it },
+                auditLogs = listOf(audit) + state.auditLogs
+            )
+        }
+        return Result.success("Saved changes to ${updated.title}")
+    }
+
     suspend fun updateOperationStatus(schoolId: String, operation: OperationRecord, status: String): Result<String> {
         val updated = operation.copy(status = status)
         supabase.saveOperation(updated, userId, schoolId).getOrThrow()
