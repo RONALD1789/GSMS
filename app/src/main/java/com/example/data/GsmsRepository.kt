@@ -1,7 +1,7 @@
 package com.example.data
 
 import android.content.Context
-import com.example.R
+import com.example.data.firebase.FirestoreProvider
 import com.example.data.seed.GsmsSeedData
 import com.example.model.*
 import com.google.firebase.Firebase
@@ -10,8 +10,6 @@ import com.google.firebase.firestore.DocumentSnapshot.ServerTimestampBehavior
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.PersistentCacheSettings
-import com.google.firebase.firestore.firestoreSettings
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +21,7 @@ import kotlinx.coroutines.tasks.await
 class GsmsRepository(private val db: FirebaseFirestore) {
 
     constructor(context: Context) : this(
-        createConfiguredFirestore(context.applicationContext)
+        FirestoreProvider.create(context.applicationContext)
     )
 
     private val auth = Firebase.auth
@@ -1133,18 +1131,4 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         ).await()
     }
 
-    companion object {
-        private fun createConfiguredFirestore(appContext: Context): FirebaseFirestore {
-            val databaseId = appContext.getString(R.string.firestore_database_id)
-            val instance = FirebaseFirestore.getInstance(databaseId)
-            try {
-                instance.firestoreSettings = firestoreSettings {
-                    setLocalCacheSettings(PersistentCacheSettings.newBuilder().build())
-                }
-            } catch (_: IllegalStateException) {
-                // Settings already applied on existing instance
-            }
-            return instance
-        }
-    }
 }
