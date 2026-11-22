@@ -32,7 +32,7 @@ fun OperationsAndFinanceScreen(
         null
     }
     val enabledSections = remember(role, school.enabledModules) {
-        RolePolicy.operationSections(role, school)
+        RolePolicy.operationSections(role, school, workspace.activeExtraCapabilities)
     }
     var activeSection by remember(enabledSections) { mutableStateOf(enabledSections.firstOrNull() ?: "") }
     var paymentTarget by remember { mutableStateOf<FinanceEntry?>(null) }
@@ -161,7 +161,7 @@ fun OperationsAndFinanceScreen(
                 }
             }
         } else {
-            val canEditOps = role.has(RoleCapability.EDIT_OPERATIONS)
+            val canEditOps = RolePolicy.canManageOperationSection(role, activeSection, workspace.activeExtraCapabilities)
             val targetTypes = when (activeSection) {
                 "Library" -> setOf("LIBRARY_BOOK", "LIBRARY_BORROW")
                 "Transport" -> setOf("VEHICLE", "ROUTE", "TRIP")
@@ -169,10 +169,10 @@ fun OperationsAndFinanceScreen(
                 "Discipline", "Counselling" -> setOf("DISCIPLINE", "COUNSELLING", "INTERVENTION", "SAFEGUARDING")
                 "Assets", "Stores" -> setOf("INVENTORY", "ASSET", "STOCK", "STOCK_ISSUE", "STOCK_RECEIPT")
                 "Hostel" -> setOf("HOSTEL")
-                "Admissions" -> setOf("ADMISSION")
+                "Admissions", "Front Desk" -> setOf("ADMISSION", "FRONT_DESK")
                 "Procurement" -> setOf("PROCUREMENT", "REQUISITION", "PURCHASE_ORDER", "VENDOR", "RFQ")
                 "Examinations" -> setOf("EXAM", "EXAM_TIMETABLE", "INVIGILATION", "MARK_MODERATION")
-                "ICT" -> setOf("ICT_TICKET", "ICT_ASSET", "SYSTEM_INCIDENT", "ACCESS_REQUEST")
+                "ICT", "ICT Systems" -> setOf("ICT_TICKET", "ICT_ASSET", "SYSTEM_INCIDENT", "ACCESS_REQUEST")
                 else -> setOf("EVENT")
             }
             val ops = workspace.operations.filter {
@@ -295,11 +295,12 @@ fun OperationsAndFinanceScreen(
             "Assets" -> "ASSET"
             "Hostel" -> "HOSTEL"
             "Admissions" -> "ADMISSION"
+            "Front Desk" -> "FRONT_DESK"
             "Procurement" -> "REQUISITION"
             "Stores" -> "STOCK"
             "Examinations" -> "EXAM"
             "Counselling" -> "COUNSELLING"
-            "ICT" -> "ICT_TICKET"
+            "ICT", "ICT Systems" -> "ICT_TICKET"
             else -> "EVENT"
         }
         var title by remember { mutableStateOf("") }
