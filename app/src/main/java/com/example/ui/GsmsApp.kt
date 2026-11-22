@@ -36,6 +36,9 @@ import kotlinx.coroutines.launch
 fun GsmsAppNavigation(
     supabaseRepository: SupabaseSyncRepository = SupabaseSyncRepository.shared
 ) {
+    LaunchedEffect(supabaseRepository) {
+        supabaseRepository.restoreSession()
+    }
     val supabaseSession by supabaseRepository.sessionFlow.collectAsStateWithLifecycle()
     val session = supabaseSession
     if (session == null) {
