@@ -16,6 +16,12 @@ interface SupabaseApiService {
         @Body body: SupabaseAuthRequest
     ): Response<SupabaseAuthResponse>
 
+    @POST("auth/v1/token")
+    suspend fun signInWithIdToken(
+        @Query("grant_type") grantType: String = "id_token",
+        @Body body: SupabaseIdTokenRequest
+    ): Response<SupabaseAuthResponse>
+
     @POST("auth/v1/signup")
     suspend fun signUp(
         @Body body: SupabaseSignUpRequest
