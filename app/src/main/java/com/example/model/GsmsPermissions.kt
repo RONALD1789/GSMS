@@ -338,6 +338,25 @@ object RolePolicy {
         }
     }
 
+    fun academicSubTabs(role: PortalRole, school: School?, extra: Set<RoleCapability>): List<String> {
+        val tabs = academicSubTabs(role, school).toMutableList()
+        if (school == null) return emptyList()
+        if (RoleCapability.VIEW_ACADEMICS in extra && (school.hasModule(GsmsModule.ACADEMICS) || school.hasModule(GsmsModule.EXAMS)) && "Academics & Exams" !in tabs) tabs.add(0, "Academics & Exams")
+        if (RoleCapability.VIEW_ATTENDANCE in extra && school.hasModule(GsmsModule.ATTENDANCE) && "Attendance" !in tabs) tabs.add("Attendance")
+        if ((RoleCapability.VIEW_ALL_REPORT_CARDS in extra || RoleCapability.VIEW_OWN_PUBLISHED_REPORTS in extra) && school.hasModule(GsmsModule.REPORT_CARDS) && "Report Cards" !in tabs) tabs.add("Report Cards")
+        if (RoleCapability.VIEW_REPORT_TEMPLATES in extra && school.hasModule(GsmsModule.REPORT_CARDS) && "Templates" !in tabs) tabs.add("Templates")
+        return tabs
+    }
+
+    fun peopleSubTabs(role: PortalRole, school: School?, extra: Set<RoleCapability>): List<String> {
+        val tabs = peopleSubTabs(role, school).toMutableList()
+        if (RoleCapability.VIEW_ALL_STUDENTS in extra && "Students" !in tabs) tabs.add(0, "Students")
+        if (RoleCapability.VIEW_ASSIGNED_STUDENTS in extra && tabs.none { it == "Students" || it == "My Assigned Students" }) tabs.add(0, "My Assigned Students")
+        if (RoleCapability.VIEW_STAFF_DIRECTORY in extra && school?.hasModule(GsmsModule.HR_STAFF) == true && "Staff & Faculty" !in tabs) tabs.add("Staff & Faculty")
+        if (RoleCapability.VIEW_LEAVE_WORKFLOW in extra && school?.hasModule(GsmsModule.LEAVE_MANAGEMENT) == true && "Leave Workflow" !in tabs) tabs.add("Leave Workflow")
+        return tabs
+    }
+
     fun operationSections(role: PortalRole, school: School?): List<String> {
         if (school == null) return emptyList()
         val allowedByRole: Set<String> = when (role) {
@@ -457,8 +476,8 @@ object RolePolicy {
     fun visibleTabs(role: PortalRole, school: School?, extra: Set<RoleCapability>): List<GsmsTab> =
         buildList {
             add(GsmsTab.DASHBOARD)
-            if (academicSubTabs(role, school).isNotEmpty() || RoleCapability.VIEW_ACADEMICS in extra) add(GsmsTab.ACADEMICS)
-            if (peopleSubTabs(role, school).isNotEmpty() || RoleCapability.VIEW_ALL_STUDENTS in extra || RoleCapability.VIEW_ASSIGNED_STUDENTS in extra || RoleCapability.VIEW_STAFF_DIRECTORY in extra) add(GsmsTab.PEOPLE)
+            if (academicSubTabs(role, school, extra).isNotEmpty()) add(GsmsTab.ACADEMICS)
+            if (peopleSubTabs(role, school, extra).isNotEmpty()) add(GsmsTab.PEOPLE)
             if (operationSections(role, school, extra).isNotEmpty() || RoleCapability.EDIT_OPERATIONS in extra || RoleCapability.VIEW_FINANCE_ALL in extra) add(GsmsTab.OPERATIONS)
             if (analyticsSubTabs(role, school, extra).isNotEmpty()) add(GsmsTab.ANALYTICS)
             add(GsmsTab.AI_GOVERNANCE)
