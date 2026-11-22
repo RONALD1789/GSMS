@@ -771,6 +771,10 @@ with check (
     public.gsms_has_any_role(school_id, array['TEACHER', 'CLASS_TEACHER'])
     and public.gsms_can_access_class_in_branch(school_id, branch_id, class_name)
   )
+  or (
+    public.gsms_has_any_role(school_id, array['ADMISSIONS_RECEPTION'])
+    and public.gsms_can_access_branch(school_id, branch_id)
+  )
 );
 create policy "gsms_students_manager_update" on public.gsms_students
 for update to authenticated
@@ -976,6 +980,35 @@ where e.student_id is null
       and s.branch_id = e.branch_id
       and lower(s.parent_name) = lower(e.party_name)
   ) = 1;
+
+create or replace view public.gsms_admissions_student_summaries
+with (security_barrier = true)
+as
+select
+  s.id,
+  s.school_id,
+  s.branch_id,
+  ''::text as owner_id,
+  s.admission_no,
+  s.full_name,
+  s.class_name,
+  s.stream,
+  s.parent_name,
+  s.parent_contact,
+  0::double precision as attendance_rate,
+  0::double precision as average_score,
+  0::double precision as fee_balance_usd,
+  'LOW'::text as risk_level,
+  'Not disclosed'::text as welfare_status
+from public.gsms_students s
+where (
+  public.gsms_is_school_manager(s.school_id)
+  or public.gsms_has_any_role(s.school_id, array['ADMISSIONS_RECEPTION'])
+)
+and public.gsms_can_access_branch(s.school_id, s.branch_id);
+
+revoke all on public.gsms_admissions_student_summaries from public, anon;
+grant select on public.gsms_admissions_student_summaries to authenticated;
 
 create or replace view public.gsms_finance_student_summaries
 with (security_barrier = true)
