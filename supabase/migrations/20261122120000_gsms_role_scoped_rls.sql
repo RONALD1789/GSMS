@@ -155,14 +155,12 @@ stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select
-    coalesce((select auth.jwt()) -> 'app_metadata' ->> 'gsms_platform_admin', 'false') = 'true'
-    or exists (
-      select 1
-      from public.gsms_schools s
-      where s.supabase_owner_uid = (select auth.uid())
-         or s.owner_id = (select auth.uid())::text
-    );
+  select exists (
+    select 1
+    from public.gsms_schools s
+    where s.supabase_owner_uid = (select auth.uid())
+       or s.owner_id = (select auth.uid())::text
+  );
 $$;
 
 create or replace function public.gsms_has_any_role(
