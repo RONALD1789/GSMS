@@ -9,7 +9,7 @@ begin;
 -- Bind staff/parent assignments to the immutable Supabase Auth user UUID.
 -- Email is used only to link an assignment at provisioning time, never as the runtime identity.
 alter table public.gsms_user_access_assignments
-  add column if not exists auth_user_id uuid references auth.users(id) on delete cascade;
+  add column if not exists auth_user_id uuid references auth.users(id) on delete set null;
 
 update public.gsms_user_access_assignments a
 set auth_user_id = u.id
@@ -51,9 +51,10 @@ as $$
 begin
   if new.email is not null then
     update public.gsms_user_access_assignments
-    set auth_user_id = new.id
-    where auth_user_id is null
-      and lower(email) = lower(new.email);
+    set email = new.email,
+        auth_user_id = new.id
+    where auth_user_id = new.id
+       or (auth_user_id is null and lower(email) = lower(new.email));
   end if;
   return new;
 end;
@@ -123,6 +124,19 @@ as $$
           and a.auth_user_id = (select auth.uid())
       );
 $$;
+
+create or replace function public.gsms_can_access_school(target_school_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.gsms_is_school_member(target_school_id);
+$$;
+
+revoke all on function public.gsms_can_access_school(text) from public, anon;
+grant execute on function public.gsms_can_access_school(text) to authenticated;
 
 create or replace function public.gsms_is_school_manager(target_school_id text)
 returns boolean
