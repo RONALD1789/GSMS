@@ -604,9 +604,16 @@ drop policy if exists "gsms_students_tenant_isolation" on public.gsms_students;
 create policy "gsms_students_scoped_select" on public.gsms_students
 for select to authenticated
 using (public.gsms_can_access_student_in_branch(school_id, branch_id, id, class_name));
-create policy "gsms_students_manager_insert" on public.gsms_students
+create policy "gsms_students_authorized_insert" on public.gsms_students
 for insert to authenticated
-with check (public.gsms_is_school_manager(school_id));
+with check (
+  public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER'])
+  or (
+    public.gsms_has_any_role(school_id, array['TEACHER', 'CLASS_TEACHER'])
+    and public.gsms_can_access_class_in_branch(school_id, branch_id, class_name)
+  )
+);
 create policy "gsms_students_manager_update" on public.gsms_students
 for update to authenticated
 using (public.gsms_is_school_manager(school_id))
