@@ -213,6 +213,49 @@ object RolePolicy {
             RoleCapability.EDIT_OPERATIONS,
             RoleCapability.VIEW_COMMUNICATIONS,
             RoleCapability.COMPOSE_COMMUNICATIONS
+        ),
+        PortalRole.DEPUTY_HEADTEACHER to setOf(
+            RoleCapability.VIEW_ACADEMICS, RoleCapability.EDIT_ACADEMICS,
+            RoleCapability.VIEW_ATTENDANCE, RoleCapability.MARK_ATTENDANCE,
+            RoleCapability.VIEW_ALL_REPORT_CARDS, RoleCapability.APPROVE_PUBLISH_REPORT_CARDS,
+            RoleCapability.VIEW_REPORT_TEMPLATES, RoleCapability.VIEW_ALL_STUDENTS,
+            RoleCapability.VIEW_STAFF_DIRECTORY, RoleCapability.VIEW_LEAVE_WORKFLOW,
+            RoleCapability.VIEW_ALERTS, RoleCapability.MANAGE_ALERTS,
+            RoleCapability.VIEW_COMMUNICATIONS, RoleCapability.COMPOSE_COMMUNICATIONS
+        ),
+        PortalRole.CLASS_TEACHER to setOf(
+            RoleCapability.VIEW_ACADEMICS, RoleCapability.EDIT_ACADEMICS,
+            RoleCapability.VIEW_ATTENDANCE, RoleCapability.MARK_ATTENDANCE,
+            RoleCapability.FILL_SUBMIT_REPORT_CARDS, RoleCapability.VIEW_REPORT_TEMPLATES,
+            RoleCapability.VIEW_ALERTS, RoleCapability.MANAGE_ALERTS,
+            RoleCapability.VIEW_COMMUNICATIONS, RoleCapability.COMPOSE_COMMUNICATIONS
+        ),
+        PortalRole.PROCUREMENT_OFFICER to setOf(
+            RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_ALERTS,
+            RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_ANALYTICS_CHARTS,
+            RoleCapability.VIEW_COMMUNICATIONS, RoleCapability.COMPOSE_COMMUNICATIONS
+        ),
+        PortalRole.STOREKEEPER to setOf(
+            RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_ALERTS,
+            RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_ANALYTICS_CHARTS
+        ),
+        PortalRole.EXAMINATION_OFFICER to setOf(
+            RoleCapability.VIEW_ACADEMICS, RoleCapability.EDIT_ACADEMICS,
+            RoleCapability.VIEW_ATTENDANCE, RoleCapability.VIEW_ALL_REPORT_CARDS,
+            RoleCapability.FILL_SUBMIT_REPORT_CARDS, RoleCapability.VIEW_REPORT_TEMPLATES,
+            RoleCapability.MANAGE_REPORT_TEMPLATES, RoleCapability.VIEW_ANALYTICS_CHARTS,
+            RoleCapability.VIEW_ALERTS, RoleCapability.VIEW_COMMUNICATIONS
+        ),
+        PortalRole.SCHOOL_COUNSELLOR to setOf(
+            RoleCapability.VIEW_ALL_STUDENTS, RoleCapability.VIEW_ATTENDANCE,
+            RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_ALERTS,
+            RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_COMMUNICATIONS,
+            RoleCapability.COMPOSE_COMMUNICATIONS
+        ),
+        PortalRole.ICT_ADMIN to setOf(
+            RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_AUDIT_LOGS,
+            RoleCapability.VIEW_ALERTS, RoleCapability.MANAGE_ALERTS,
+            RoleCapability.VIEW_ANALYTICS_CHARTS
         )
     )
 
@@ -290,7 +333,14 @@ object RolePolicy {
                 "Finance", "Library", "Transport", "Welfare",
                 "Discipline", "Assets", "Hostel", "Admissions", "Events"
             )
-            PortalRole.HEADTEACHER -> setOf("Welfare", "Discipline", "Admissions", "Events")
+            PortalRole.HEADTEACHER,
+            PortalRole.DEPUTY_HEADTEACHER -> setOf("Welfare", "Discipline", "Admissions", "Events")
+            PortalRole.CLASS_TEACHER -> setOf("Welfare", "Discipline")
+            PortalRole.PROCUREMENT_OFFICER -> setOf("Procurement")
+            PortalRole.STOREKEEPER -> setOf("Stores")
+            PortalRole.EXAMINATION_OFFICER -> setOf("Examinations")
+            PortalRole.SCHOOL_COUNSELLOR -> setOf("Counselling", "Welfare", "Discipline")
+            PortalRole.ICT_ADMIN -> setOf("ICT")
             PortalRole.FINANCE_OFFICER -> setOf("Finance")
             PortalRole.PARENT -> setOf("Finance")
             PortalRole.HR_MANAGER -> setOf("Finance")
@@ -304,6 +354,11 @@ object RolePolicy {
         }
         return buildList {
             if ("Finance" in allowedByRole && school.hasModule(GsmsModule.FINANCE)) add("Finance")
+            if ("Procurement" in allowedByRole && school.hasModule(GsmsModule.PROCUREMENT)) add("Procurement")
+            if ("Stores" in allowedByRole && school.hasModule(GsmsModule.INVENTORY_ASSETS)) add("Stores")
+            if ("Examinations" in allowedByRole && school.hasModule(GsmsModule.EXAMS)) add("Examinations")
+            if ("Counselling" in allowedByRole && school.hasModule(GsmsModule.DISCIPLINE)) add("Counselling")
+            if ("ICT" in allowedByRole && school.hasModule(GsmsModule.ICT_SYSTEMS)) add("ICT")
             if ("Library" in allowedByRole && school.hasModule(GsmsModule.LIBRARY)) add("Library")
             if ("Transport" in allowedByRole && school.hasModule(GsmsModule.TRANSPORT)) add("Transport")
             if ("Welfare" in allowedByRole && school.hasModule(GsmsModule.HEALTH_WELFARE)) add("Welfare")
@@ -382,8 +437,15 @@ object RolePolicy {
         return when (role) {
             PortalRole.SUPER_ADMIN,
             PortalRole.SCHOOL_ADMIN,
-            PortalRole.HEADTEACHER -> alerts
+            PortalRole.HEADTEACHER,
+            PortalRole.DEPUTY_HEADTEACHER -> alerts
+            PortalRole.CLASS_TEACHER,
             PortalRole.TEACHER -> alerts.filter { it.category in setOf("ACADEMIC", "ATTENDANCE", "BEHAVIOR") }
+            PortalRole.PROCUREMENT_OFFICER -> alerts.filter { it.category in setOf("PROCUREMENT", "FINANCE", "STOCK") }
+            PortalRole.STOREKEEPER -> alerts.filter { it.category in setOf("STOCK", "ASSET", "PROCUREMENT") }
+            PortalRole.EXAMINATION_OFFICER -> alerts.filter { it.category in setOf("ACADEMIC", "EXAM", "ATTENDANCE") }
+            PortalRole.SCHOOL_COUNSELLOR -> alerts.filter { it.category in setOf("WELFARE", "ATTENDANCE", "BEHAVIOR", "SAFEGUARDING") }
+            PortalRole.ICT_ADMIN -> alerts.filter { it.category in setOf("ICT", "SYSTEM", "SECURITY") }
             PortalRole.FINANCE_OFFICER -> alerts.filter { it.category == "FINANCE" }
             PortalRole.HR_MANAGER -> alerts.filter { it.category == "STAFFING" }
             PortalRole.WELFARE_NURSE -> alerts.filter { it.category in setOf("WELFARE", "ATTENDANCE", "BEHAVIOR") }
