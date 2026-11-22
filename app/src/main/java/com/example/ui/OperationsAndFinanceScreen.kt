@@ -37,6 +37,7 @@ fun OperationsAndFinanceScreen(
     var activeSection by remember(enabledSections) { mutableStateOf(enabledSections.firstOrNull() ?: "") }
     var paymentTarget by remember { mutableStateOf<FinanceEntry?>(null) }
     var showAddOpDialog by remember { mutableStateOf(false) }
+    var showCreateInvoiceDialog by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<OperationRecord?>(null) }
 
     if (enabledSections.isEmpty()) {
@@ -97,6 +98,7 @@ fun OperationsAndFinanceScreen(
 
         if (activeSection == "Finance") {
             val canRecordPayment = role.has(RoleCapability.RECORD_FINANCE_PAYMENT)
+            val canCreateInvoice = role.has(RoleCapability.CREATE_FINANCE_INVOICE)
             val roleScopedFinance = RolePolicy.filterFinanceForRole(role, workspace.finance, focusStudent)
             val financeItems = roleScopedFinance.filter {
                 searchQuery.isBlank() || it.title.contains(searchQuery, true) || it.partyName.contains(searchQuery, true)
@@ -129,7 +131,16 @@ fun OperationsAndFinanceScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            StatusPill("${if (totalBilled > 0) ((totalPaid / totalBilled) * 100).toInt() else 100}%", EmeraldTeal)
+                            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                StatusPill("${if (totalBilled > 0) ((totalPaid / totalBilled) * 100).toInt() else 100}%", EmeraldTeal)
+                                if (canCreateInvoice) {
+                                    FilledTonalButton(onClick = { showCreateInvoiceDialog = true }) {
+                                        Icon(Icons.Rounded.Add, contentDescription = null)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("New Invoice")
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -289,6 +300,17 @@ fun OperationsAndFinanceScreen(
         )
     }
 
+
+    if (showCreateInvoiceDialog) {
+        FinanceInvoiceDialog(
+            students = workspace.students,
+            onDismiss = { showCreateInvoiceDialog = false },
+            onCreate = { student, title, category, amount ->
+                viewModel.createFinanceInvoice(school, workspace.activeBranchId, student, title, category, amount, role)
+                showCreateInvoiceDialog = false
+            }
+        )
+    }
 
     editTarget?.let { target ->
         var title by remember(target.id) { mutableStateOf(target.title) }
