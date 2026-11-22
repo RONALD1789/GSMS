@@ -529,6 +529,7 @@ revoke all on function public.gsms_can_provision_school() from public, anon;
 revoke all on function public.gsms_has_any_role(text, text[]) from public, anon;
 revoke all on function public.gsms_has_extra_permission(text, text) from public, anon;
 revoke all on function public.gsms_can_manage_operation(text, text) from public, anon;
+revoke all on function public.gsms_can_view_operation(text, text) from public, anon;
 revoke all on function public.gsms_is_school_member(text) from public, anon;
 revoke all on function public.gsms_is_school_manager(text) from public, anon;
 revoke all on function public.gsms_can_access_class(text, text) from public, anon;
@@ -546,6 +547,7 @@ grant execute on function public.gsms_can_provision_school() to authenticated;
 grant execute on function public.gsms_has_any_role(text, text[]) to authenticated;
 grant execute on function public.gsms_has_extra_permission(text, text) to authenticated;
 grant execute on function public.gsms_can_manage_operation(text, text) to authenticated;
+grant execute on function public.gsms_can_view_operation(text, text) to authenticated;
 grant execute on function public.gsms_is_school_member(text) to authenticated;
 grant execute on function public.gsms_is_school_manager(text) to authenticated;
 grant execute on function public.gsms_can_access_class(text, text) to authenticated;
@@ -660,6 +662,35 @@ with check (public.gsms_is_school_manager(school_id));
 create policy "gsms_branches_manager_delete" on public.gsms_branches
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
+
+create or replace function public.gsms_can_view_operation(
+  target_school_id text,
+  target_module_type text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select public.gsms_can_manage_operation(target_school_id, target_module_type)
+    or (
+      upper(target_module_type) in ('PROCUREMENT', 'REQUISITION', 'PURCHASE_ORDER', 'VENDOR', 'RFQ')
+      and public.gsms_has_any_role(target_school_id, array['FINANCE_OFFICER', 'STOREKEEPER'])
+    )
+    or (
+      upper(target_module_type) in ('STOCK', 'STOCK_ISSUE', 'STOCK_RECEIPT', 'INVENTORY', 'ASSET')
+      and public.gsms_has_any_role(target_school_id, array['PROCUREMENT_OFFICER', 'ICT_ADMIN'])
+    )
+    or (
+      upper(target_module_type) in ('DISCIPLINE', 'COUNSELLING', 'INTERVENTION', 'SAFEGUARDING')
+      and public.gsms_has_any_role(target_school_id, array['WELFARE_NURSE'])
+    )
+    or (
+      upper(target_module_type) in ('WELFARE', 'HOSTEL')
+      and public.gsms_has_any_role(target_school_id, array['SCHOOL_COUNSELLOR'])
+    );
+$;
 
 -- USER ACCESS ASSIGNMENTS: users may read their own assignment. School managers may
 -- read/manage all assignments. SUPER_ADMIN is reserved for the verified owner session, not an assignment.
@@ -971,7 +1002,7 @@ drop policy if exists "gsms_operations_authorized_update" on public.gsms_operati
 drop policy if exists "gsms_operations_manager_delete" on public.gsms_operations;
 create policy "gsms_operations_authorized_select" on public.gsms_operations
 for select to authenticated
-using (public.gsms_can_manage_operation(school_id, module_type)
+using (public.gsms_can_view_operation(school_id, module_type)
   and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_operations_authorized_insert" on public.gsms_operations
 for insert to authenticated
