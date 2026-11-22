@@ -132,6 +132,19 @@ class RolePolicyUnitTest {
         assertFalse(PortalRole.EXAMINATION_OFFICER.has(RoleCapability.APPROVE_PUBLISH_REPORT_CARDS))
         assertTrue(PortalRole.ICT_ADMIN.has(RoleCapability.MANAGE_USER_PERMISSIONS))
         assertFalse(PortalRole.ICT_ADMIN.has(RoleCapability.RECORD_FINANCE_PAYMENT))
+
+        assertTrue(PortalRole.PROCUREMENT_OFFICER.has(RoleCapability.MANAGE_PROCUREMENT))
+        assertFalse(PortalRole.PROCUREMENT_OFFICER.has(RoleCapability.MANAGE_INVENTORY))
+        assertTrue(PortalRole.STOREKEEPER.has(RoleCapability.MANAGE_INVENTORY))
+        assertTrue(PortalRole.EXAMINATION_OFFICER.has(RoleCapability.MODERATE_EXAMS))
+        assertTrue(PortalRole.SCHOOL_COUNSELLOR.has(RoleCapability.MANAGE_COUNSELLING))
+        assertTrue(PortalRole.WELFARE_NURSE.has(RoleCapability.MANAGE_HEALTH))
+        assertTrue(PortalRole.ADMISSIONS_RECEPTION.has(RoleCapability.MANAGE_ADMISSIONS))
+        assertTrue(PortalRole.ICT_ADMIN.has(RoleCapability.MANAGE_ICT))
+        assertTrue(RolePolicy.canManageOperationSection(PortalRole.PROCUREMENT_OFFICER, "Procurement"))
+        assertFalse(RolePolicy.canManageOperationSection(PortalRole.PROCUREMENT_OFFICER, "Stores"))
+        assertTrue(RolePolicy.canManageOperationSection(PortalRole.STOREKEEPER, "Stores"))
+        assertFalse(RolePolicy.canManageOperationSection(PortalRole.STOREKEEPER, "Procurement"))
     }
 
     @Test
@@ -153,6 +166,7 @@ class RolePolicyUnitTest {
         val teacherTabsWithExtra = RolePolicy.visibleTabs(PortalRole.TEACHER, fullSchool, extra)
         assertTrue(GsmsTab.OPERATIONS in teacherTabsWithExtra)
         assertEquals(listOf("Procurement"), RolePolicy.operationSections(PortalRole.TEACHER, fullSchool, extra))
+        assertTrue(RolePolicy.canManageOperationSection(PortalRole.TEACHER, "Procurement", extra))
     }
 
     @Test
