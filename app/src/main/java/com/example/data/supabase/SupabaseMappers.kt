@@ -214,7 +214,8 @@ fun SbCommRow.toDomain(): CommunicationItem = CommunicationItem(
     body = body,
     senderName = senderName,
     senderRole = senderRole,
-    aiDrafted = aiDrafted
+    aiDrafted = aiDrafted,
+    targetClass = targetClass
 )
 
 fun SbOperationRow.toDomain(): OperationRecord = OperationRecord(
