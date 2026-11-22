@@ -934,21 +934,59 @@ create policy "gsms_finance_manager_delete" on public.gsms_finance_entries
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- LEAVE: leadership and HR only, scoped to assigned branches. A future schema change
--- should link leave requests to auth.uid() before staff can read their own requests.
+-- LEAVE: leadership and HR manage the workflow; staff can submit and read only their own requests.
+create or replace function public.gsms_can_apply_own_leave(
+  target_school_id text,
+  target_staff_id text,
+  target_staff_name text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.gsms_user_access_assignments a
+    join public.gsms_staff s
+      on s.school_id = a.school_id
+     and s.id = target_staff_id
+     and lower(s.full_name) = lower(a.full_name)
+    where a.school_id = target_school_id
+      and a.active = true
+      and a.auth_user_id = (select auth.uid())
+      and upper(a.primary_role) in ('HEADTEACHER', 'TEACHER', 'CLASS_TEACHER', 'HR_MANAGER')
+      and lower(a.full_name) = lower(coalesce(target_staff_name, ''))
+  );
+$$;
+
+revoke all on function public.gsms_can_apply_own_leave(text, text, text) from public, anon;
+grant execute on function public.gsms_can_apply_own_leave(text, text, text) to authenticated;
+
 drop policy if exists "gsms_leave_requests_tenant_isolation" on public.gsms_leave_requests;
+drop policy if exists "gsms_leave_authorized_select" on public.gsms_leave_requests;
+drop policy if exists "gsms_leave_authorized_insert" on public.gsms_leave_requests;
+drop policy if exists "gsms_leave_authorized_update" on public.gsms_leave_requests;
+drop policy if exists "gsms_leave_manager_delete" on public.gsms_leave_requests;
 create policy "gsms_leave_authorized_select" on public.gsms_leave_requests
 for select to authenticated
 using (
-  (public.gsms_is_school_manager(school_id)
-    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'HR_MANAGER']))
+  (
+    public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'HR_MANAGER'])
+    or public.gsms_can_apply_own_leave(school_id, staff_id, staff_name)
+  )
   and public.gsms_can_access_branch(school_id, branch_id)
 );
 create policy "gsms_leave_authorized_insert" on public.gsms_leave_requests
 for insert to authenticated
 with check (
-  (public.gsms_is_school_manager(school_id)
-    or public.gsms_has_any_role(school_id, array['HR_MANAGER']))
+  (
+    public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HR_MANAGER'])
+    or public.gsms_can_apply_own_leave(school_id, staff_id, staff_name)
+  )
   and public.gsms_can_access_branch(school_id, branch_id)
 );
 create policy "gsms_leave_authorized_update" on public.gsms_leave_requests
