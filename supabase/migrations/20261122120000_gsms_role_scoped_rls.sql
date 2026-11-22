@@ -495,7 +495,10 @@ using (
 create policy "gsms_assignments_manager_insert" on public.gsms_user_access_assignments
 for insert to authenticated
 with check (
-  public.gsms_is_school_owner(school_id)
+  (
+    public.gsms_is_school_owner(school_id)
+    and upper(primary_role) <> 'SUPER_ADMIN'
+  )
   or (
     public.gsms_has_any_role(school_id, array['SCHOOL_ADMIN'])
     and upper(primary_role) <> 'SUPER_ADMIN'
@@ -506,7 +509,10 @@ create policy "gsms_assignments_manager_update" on public.gsms_user_access_assig
 for update to authenticated
 using (public.gsms_is_school_manager(school_id))
 with check (
-  public.gsms_is_school_owner(school_id)
+  (
+    public.gsms_is_school_owner(school_id)
+    and upper(primary_role) <> 'SUPER_ADMIN'
+  )
   or (
     public.gsms_has_any_role(school_id, array['SCHOOL_ADMIN'])
     and upper(primary_role) <> 'SUPER_ADMIN'
