@@ -762,9 +762,21 @@ using (public.gsms_is_school_manager(school_id));
 drop policy if exists "gsms_communications_tenant_isolation" on public.gsms_communications;
 create policy "gsms_comms_authorized_select" on public.gsms_communications
 for select to authenticated
-using ((public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER']))
-  and public.gsms_can_access_branch(school_id, branch_id));
+using (
+  (
+    public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER'])
+    or (
+      public.gsms_has_any_role(school_id, array['PARENT'])
+      and (upper(audience) like '%PARENT%' or upper(audience) = 'ALL')
+    )
+    or (
+      public.gsms_has_any_role(school_id, array['STUDENT'])
+      and (upper(audience) like '%STUDENT%' or upper(audience) = 'ALL')
+    )
+  )
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_comms_authorized_insert" on public.gsms_communications
 for insert to authenticated
 with check ((public.gsms_is_school_manager(school_id)
