@@ -48,7 +48,7 @@ Also create a second branch A2, a second class P6, and a second student S2.
 4. Parent cannot select another student's records or any report that is not APPROVED/PUBLISHED.
 5. Parent cannot access attendance yet: the current attendance table stores a display name but has no student ID foreign key. Do not match by name.
 7. Finance Officer cannot read student medical/welfare alerts or HR records.
-8. School Admin cannot create a SUPER_ADMIN assignment or alter their own role by changing their assignment.
+8. No access assignment can grant SUPER_ADMIN; the verified school owner is the only account treated as the owner/Super Admin. A School Admin also cannot alter their own role by changing their assignment.
 9. A member of School A cannot read or mutate any School B data.
 10. A disabled assignment (`active = false`) must immediately lose access after the next authenticated request.
 11. An unauthenticated/anonymous request must not read or mutate any tenant data.
