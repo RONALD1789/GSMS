@@ -192,12 +192,14 @@ object SupabaseSeedData {
             FinanceEntry(
                 id = "fin_1_$shortUid", schoolId = mainSchoolId, branchId = "branch_main", ownerId = uid,
                 entryType = "INVOICE", referenceNo = "INV-2026-041", title = "Term 1 Tuition & Lab Fee",
-                partyName = "Wei Lin", category = "Tuition", amountUsd = 2400.0, paidUsd = 2400.0, status = "PAID"
+                partyName = "Wei Lin", category = "Tuition", amountUsd = 2400.0, paidUsd = 2400.0, status = "PAID",
+                studentId = "stu_1_$shortUid"
             ),
             FinanceEntry(
                 id = "fin_2_$shortUid", schoolId = mainSchoolId, branchId = "branch_main", ownerId = uid,
                 entryType = "INVOICE", referenceNo = "INV-2026-078", title = "Term 1 Boarding & Tuition",
-                partyName = "Ngozi Okafor", category = "Tuition", amountUsd = 2400.0, paidUsd = 1760.0, status = "PARTIAL"
+                partyName = "Ngozi Okafor", category = "Tuition", amountUsd = 2400.0, paidUsd = 1760.0, status = "PARTIAL",
+                studentId = "stu_2_$shortUid"
             )
         )
 
