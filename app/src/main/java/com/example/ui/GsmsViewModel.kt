@@ -326,10 +326,25 @@ class GsmsViewModel(
         launchMutation { workspaceController.recordFinancePayment(schoolId, entry, amountUsd) }
     }
 
-    fun sendCommunication(school: School, branchId: String, channel: String, audience: String, title: String, body: String,
-        senderRole: PortalRole, aiDrafted: Boolean) {
+    fun sendCommunication(
+        school: School, branchId: String, channel: String, audience: String,
+        title: String, body: String, senderRole: PortalRole, aiDrafted: Boolean,
+        targetClass: String? = null
+    ) {
         if (!requireCapability(RoleCapability.COMPOSE_COMMUNICATIONS, "send school notices", senderRole)) return
-        launchMutation { workspaceController.sendCommunication(school, branchId, channel, audience, title, body, currentActorName(), senderRole, aiDrafted) }
+        if (senderRole in setOf(PortalRole.TEACHER, PortalRole.CLASS_TEACHER)) {
+            val assignedClasses = (uiState.value as? UiState.Success)?.data?.assignedClasses.orEmpty()
+            if (targetClass.isNullOrBlank() || targetClass !in assignedClasses) {
+                _statusBanner.value = "Teachers may send parent notices only to one of their assigned classes."
+                return
+            }
+        }
+        launchMutation {
+            workspaceController.sendCommunication(
+                school, branchId, channel, audience, title, body,
+                currentActorName(), senderRole, aiDrafted, targetClass
+            )
+        }
     }
 
     fun addOperationRecord(school: School, branchId: String, moduleType: String, title: String, subtitle: String,
