@@ -556,12 +556,14 @@ class SupabaseWorkspaceController(
         body: String,
         actorName: String,
         senderRole: PortalRole,
-        aiDrafted: Boolean
+        aiDrafted: Boolean,
+        targetClass: String? = null
     ): Result<String> {
         val item = CommunicationItem(
             id = newId("comm"), schoolId = school.id, branchId = branchId, ownerId = userId,
             channel = channel, audience = audience, title = title.trim(), body = body.trim(),
-            senderName = actorName, senderRole = senderRole.name, aiDrafted = aiDrafted
+            senderName = actorName, senderRole = senderRole.name, aiDrafted = aiDrafted,
+            targetClass = targetClass?.trim()?.takeIf { it.isNotBlank() }
         )
         supabase.saveCommunication(item, userId, school.id).getOrThrow()
         mutateSuccess { ws -> ws.copy(communications = listOf(item) + ws.communications) }
