@@ -377,6 +377,29 @@ as $$
     );
 $$;
 
+create or replace function public.gsms_current_actor_matches(
+  target_school_id text,
+  target_actor_role text,
+  target_actor_name text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.gsms_is_school_owner(target_school_id)
+    or exists (
+      select 1
+      from public.gsms_user_access_assignments a
+      where a.school_id = target_school_id
+        and a.active = true
+        and a.auth_user_id = (select auth.uid())
+        and upper(a.primary_role) = upper(coalesce(target_actor_role, ''))
+        and lower(a.full_name) = lower(coalesce(target_actor_name, ''))
+    );
+$$;
+
 create or replace function public.gsms_can_manage_assignments(target_school_id text)
 returns boolean
 language sql
@@ -399,6 +422,7 @@ revoke all on function public.gsms_can_access_student_in_branch(text, text, text
 revoke all on function public.gsms_can_access_student(text, text, text) from public, anon;
 revoke all on function public.gsms_parent_can_access_student(text, text) from public, anon, authenticated;
 revoke all on function public.gsms_can_read_report(text, text, text, text) from public, anon;
+revoke all on function public.gsms_current_actor_matches(text, text, text) from public, anon;
 revoke all on function public.gsms_can_manage_assignments(text) from public, anon;
 
 grant execute on function public.gsms_is_school_owner(text) to authenticated;
@@ -411,6 +435,7 @@ grant execute on function public.gsms_can_access_class_in_branch(text, text, tex
 grant execute on function public.gsms_can_access_student_in_branch(text, text, text, text) to authenticated;
 grant execute on function public.gsms_can_access_student(text, text, text) to authenticated;
 grant execute on function public.gsms_can_read_report(text, text, text, text) to authenticated;
+grant execute on function public.gsms_current_actor_matches(text, text, text) to authenticated;
 grant execute on function public.gsms_can_manage_assignments(text) to authenticated;
 
 -- Parent/learner summary view deliberately excludes internal risk, welfare and contact fields.
@@ -891,6 +916,6 @@ using (public.gsms_is_school_manager(school_id)
   or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'ICT_ADMIN']));
 create policy "gsms_audit_logs_member_insert" on public.gsms_audit_logs
 for insert to authenticated
-with check (public.gsms_is_school_member(school_id));
+with check (public.gsms_current_actor_matches(school_id, actor_role, actor_name));
 
 commit;
