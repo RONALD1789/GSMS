@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 class SupabaseWorkspaceController(
@@ -22,6 +25,8 @@ class SupabaseWorkspaceController(
 
     private fun newId(prefix: String): String =
         "${prefix}_${UUID.randomUUID().toString().replace("-", "").take(10)}"
+
+    private fun todayIso(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
     suspend fun boot(): Result<Unit> {
         _uiState.value = UiState.Loading
@@ -331,7 +336,7 @@ class SupabaseWorkspaceController(
             id = newId("att"), schoolId = school.id, branchId = branchId,
             academicYear = school.activeAcademicYear, term = school.activeTerm,
             ownerId = userId, targetType = "STUDENT", targetName = student.fullName,
-            studentId = student.id, className = student.className, dateIso = "2026-11-21", status = status
+            studentId = student.id, className = student.className, dateIso = todayIso(), status = status
         )
         supabase.saveAttendance(record, userId, school.id).getOrThrow()
         mutateSuccess { ws -> ws.copy(attendance = listOf(record) + ws.attendance) }
