@@ -562,11 +562,11 @@ create policy "gsms_comms_manager_delete" on public.gsms_communications
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- OPERATIONS: leadership and each relevant operational role.
+-- OPERATIONS: leadership and relevant operational role, restricted to assigned branches.
 drop policy if exists "gsms_operations_tenant_isolation" on public.gsms_operations;
 create policy "gsms_operations_authorized_select" on public.gsms_operations
 for select to authenticated
-using (
+using ((
   public.gsms_is_school_manager(school_id)
   or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'ICT_ADMIN'])
   or (upper(module_type) like '%LIBRARY%' and public.gsms_has_any_role(school_id, array['LIBRARIAN']))
@@ -576,10 +576,10 @@ using (
   or (upper(module_type) like '%HEALTH%' and public.gsms_has_any_role(school_id, array['WELFARE_NURSE']))
   or (upper(module_type) like '%ADMISSION%' and public.gsms_has_any_role(school_id, array['ADMISSIONS_RECEPTION']))
   or (upper(module_type) like '%DISCIPLINE%' and public.gsms_has_any_role(school_id, array['SCHOOL_COUNSELLOR']))
-);
+) and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_operations_authorized_insert" on public.gsms_operations
 for insert to authenticated
-with check (
+with check ((
   public.gsms_is_school_manager(school_id)
   or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'ICT_ADMIN'])
   or (upper(module_type) like '%LIBRARY%' and public.gsms_has_any_role(school_id, array['LIBRARIAN']))
@@ -589,10 +589,10 @@ with check (
   or (upper(module_type) like '%HEALTH%' and public.gsms_has_any_role(school_id, array['WELFARE_NURSE']))
   or (upper(module_type) like '%ADMISSION%' and public.gsms_has_any_role(school_id, array['ADMISSIONS_RECEPTION']))
   or (upper(module_type) like '%DISCIPLINE%' and public.gsms_has_any_role(school_id, array['SCHOOL_COUNSELLOR']))
-);
+) and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_operations_authorized_update" on public.gsms_operations
 for update to authenticated
-using (
+using ((
   public.gsms_is_school_manager(school_id)
   or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'ICT_ADMIN'])
   or (upper(module_type) like '%LIBRARY%' and public.gsms_has_any_role(school_id, array['LIBRARIAN']))
@@ -602,8 +602,8 @@ using (
   or (upper(module_type) like '%HEALTH%' and public.gsms_has_any_role(school_id, array['WELFARE_NURSE']))
   or (upper(module_type) like '%ADMISSION%' and public.gsms_has_any_role(school_id, array['ADMISSIONS_RECEPTION']))
   or (upper(module_type) like '%DISCIPLINE%' and public.gsms_has_any_role(school_id, array['SCHOOL_COUNSELLOR']))
-)
-with check (
+) and public.gsms_can_access_branch(school_id, branch_id))
+with check ((
   public.gsms_is_school_manager(school_id)
   or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'ICT_ADMIN'])
   or (upper(module_type) like '%LIBRARY%' and public.gsms_has_any_role(school_id, array['LIBRARIAN']))
@@ -613,7 +613,7 @@ with check (
   or (upper(module_type) like '%HEALTH%' and public.gsms_has_any_role(school_id, array['WELFARE_NURSE']))
   or (upper(module_type) like '%ADMISSION%' and public.gsms_has_any_role(school_id, array['ADMISSIONS_RECEPTION']))
   or (upper(module_type) like '%DISCIPLINE%' and public.gsms_has_any_role(school_id, array['SCHOOL_COUNSELLOR']))
-);
+) and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_operations_manager_delete" on public.gsms_operations
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
