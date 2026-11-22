@@ -183,6 +183,104 @@ as $$
   );
 $$;
 
+create or replace function public.gsms_has_extra_permission(
+  target_school_id text,
+  capability_name text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select exists (
+    select 1
+    from public.gsms_user_access_assignments a
+    where a.school_id = target_school_id
+      and a.active = true
+      and a.auth_user_id = (select auth.uid())
+      and upper(capability_name) = any (
+        select upper(permission_name)
+        from unnest(a.extra_permissions) permission_name
+      )
+  );
+$;
+
+create or replace function public.gsms_can_manage_operation(
+  target_school_id text,
+  target_module_type text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select
+    public.gsms_is_school_manager(target_school_id)
+    or public.gsms_has_any_role(target_school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'ICT_ADMIN'])
+    or (
+      upper(target_module_type) like '%LIBRARY%'
+      and public.gsms_has_any_role(target_school_id, array['LIBRARIAN'])
+    )
+    or (
+      upper(target_module_type) in ('VEHICLE', 'ROUTE', 'TRIP')
+      and public.gsms_has_any_role(target_school_id, array['TRANSPORT_MANAGER'])
+    )
+    or (
+      upper(target_module_type) in ('PROCUREMENT', 'REQUISITION', 'PURCHASE_ORDER', 'VENDOR', 'RFQ')
+      and public.gsms_has_any_role(target_school_id, array['PROCUREMENT_OFFICER'])
+    )
+    or (
+      upper(target_module_type) in ('STOCK', 'STOCK_ISSUE', 'STOCK_RECEIPT', 'INVENTORY', 'ASSET')
+      and public.gsms_has_any_role(target_school_id, array['STOREKEEPER'])
+    )
+    or (
+      upper(target_module_type) in ('WELFARE', 'HOSTEL')
+      and public.gsms_has_any_role(target_school_id, array['WELFARE_NURSE'])
+    )
+    or (
+      upper(target_module_type) in ('ADMISSION', 'FRONT_DESK')
+      and public.gsms_has_any_role(target_school_id, array['ADMISSIONS_RECEPTION'])
+    )
+    or (
+      upper(target_module_type) in ('DISCIPLINE', 'COUNSELLING', 'INTERVENTION', 'SAFEGUARDING')
+      and public.gsms_has_any_role(target_school_id, array['SCHOOL_COUNSELLOR'])
+    )
+    or (
+      upper(target_module_type) in ('EXAM', 'EXAM_TIMETABLE', 'INVIGILATION', 'MARK_MODERATION')
+      and public.gsms_has_any_role(target_school_id, array['EXAMINATION_OFFICER'])
+    )
+    or (
+      upper(target_module_type) in ('PROCUREMENT', 'REQUISITION', 'PURCHASE_ORDER', 'VENDOR', 'RFQ')
+      and public.gsms_has_extra_permission(target_school_id, 'MANAGE_PROCUREMENT')
+    )
+    or (
+      upper(target_module_type) in ('STOCK', 'STOCK_ISSUE', 'STOCK_RECEIPT', 'INVENTORY', 'ASSET')
+      and public.gsms_has_extra_permission(target_school_id, 'MANAGE_INVENTORY')
+    )
+    or (
+      upper(target_module_type) in ('ICT_TICKET', 'ICT_ASSET', 'SYSTEM_INCIDENT', 'ACCESS_REQUEST')
+      and public.gsms_has_extra_permission(target_school_id, 'MANAGE_ICT')
+    )
+    or (
+      upper(target_module_type) in ('DISCIPLINE', 'COUNSELLING', 'INTERVENTION', 'SAFEGUARDING')
+      and public.gsms_has_extra_permission(target_school_id, 'MANAGE_COUNSELLING')
+    )
+    or (
+      upper(target_module_type) in ('WELFARE', 'HOSTEL')
+      and public.gsms_has_extra_permission(target_school_id, 'MANAGE_HEALTH')
+    )
+    or (
+      upper(target_module_type) in ('ADMISSION', 'FRONT_DESK')
+      and public.gsms_has_extra_permission(target_school_id, 'MANAGE_ADMISSIONS')
+    )
+    or (
+      upper(target_module_type) in ('EXAM', 'EXAM_TIMETABLE', 'INVIGILATION', 'MARK_MODERATION')
+      and public.gsms_has_extra_permission(target_school_id, 'MODERATE_EXAMS')
+    );
+$;
+
 create or replace function public.gsms_is_school_member(target_school_id text)
 returns boolean
 language sql
@@ -221,7 +319,7 @@ security definer
 set search_path = public, pg_temp
 as $$
   select public.gsms_is_school_owner(target_school_id)
-      or public.gsms_has_any_role(target_school_id, array['SCHOOL_ADMIN']);
+      or public.gsms_has_any_role(target_school_id, array['SCHOOL_ADMIN', 'ICT_ADMIN']);
 $$;
 
 create or replace function public.gsms_can_access_class(
@@ -429,6 +527,8 @@ $$;
 revoke all on function public.gsms_is_school_owner(text) from public, anon;
 revoke all on function public.gsms_can_provision_school() from public, anon;
 revoke all on function public.gsms_has_any_role(text, text[]) from public, anon;
+revoke all on function public.gsms_has_extra_permission(text, text) from public, anon;
+revoke all on function public.gsms_can_manage_operation(text, text) from public, anon;
 revoke all on function public.gsms_is_school_member(text) from public, anon;
 revoke all on function public.gsms_is_school_manager(text) from public, anon;
 revoke all on function public.gsms_can_access_class(text, text) from public, anon;
@@ -444,6 +544,8 @@ revoke all on function public.gsms_can_manage_assignments(text) from public, ano
 grant execute on function public.gsms_is_school_owner(text) to authenticated;
 grant execute on function public.gsms_can_provision_school() to authenticated;
 grant execute on function public.gsms_has_any_role(text, text[]) to authenticated;
+grant execute on function public.gsms_has_extra_permission(text, text) to authenticated;
+grant execute on function public.gsms_can_manage_operation(text, text) to authenticated;
 grant execute on function public.gsms_is_school_member(text) to authenticated;
 grant execute on function public.gsms_is_school_manager(text) to authenticated;
 grant execute on function public.gsms_can_access_class(text, text) to authenticated;
@@ -566,6 +668,7 @@ create policy "gsms_assignments_select" on public.gsms_user_access_assignments
 for select to authenticated
 using (
   public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['ICT_ADMIN'])
   or auth_user_id = (select auth.uid())
 );
 create policy "gsms_assignments_manager_insert" on public.gsms_user_access_assignments
@@ -580,10 +683,17 @@ with check (
     and upper(primary_role) <> 'SUPER_ADMIN'
     and lower(email) <> lower(coalesce((select auth.jwt()) ->> 'email', ''))
   )
+  or (
+    public.gsms_has_any_role(school_id, array['ICT_ADMIN'])
+    and upper(primary_role) in ('TEACHER', 'CLASS_TEACHER', 'PARENT', 'STUDENT', 'LIBRARIAN', 'TRANSPORT_MANAGER', 'WELFARE_NURSE', 'ADMISSIONS_RECEPTION', 'PROCUREMENT_OFFICER', 'STOREKEEPER', 'EXAMINATION_OFFICER', 'SCHOOL_COUNSELLOR')
+    and extra_permissions <@ array['VIEW_ACADEMICS', 'EDIT_ACADEMICS', 'VIEW_ATTENDANCE', 'MARK_ATTENDANCE', 'VIEW_ASSIGNED_STUDENTS', 'FILL_SUBMIT_REPORT_CARDS', 'VIEW_OWN_PUBLISHED_REPORTS', 'VIEW_COMMUNICATIONS', 'VIEW_ALERTS', 'EDIT_OPERATIONS', 'MANAGE_PROCUREMENT', 'MANAGE_INVENTORY', 'MANAGE_ICT', 'MANAGE_COUNSELLING', 'MANAGE_HEALTH', 'MANAGE_ADMISSIONS', 'MODERATE_EXAMS']::text[]
+    and lower(email) <> lower(coalesce((select auth.jwt()) ->> 'email', ''))
+  )
 );
 create policy "gsms_assignments_manager_update" on public.gsms_user_access_assignments
 for update to authenticated
-using (public.gsms_is_school_manager(school_id))
+using (public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['ICT_ADMIN']))
 with check (
   (
     public.gsms_is_school_owner(school_id)
@@ -592,6 +702,12 @@ with check (
   or (
     public.gsms_has_any_role(school_id, array['SCHOOL_ADMIN'])
     and upper(primary_role) <> 'SUPER_ADMIN'
+    and lower(email) <> lower(coalesce((select auth.jwt()) ->> 'email', ''))
+  )
+  or (
+    public.gsms_has_any_role(school_id, array['ICT_ADMIN'])
+    and upper(primary_role) in ('TEACHER', 'CLASS_TEACHER', 'PARENT', 'STUDENT', 'LIBRARIAN', 'TRANSPORT_MANAGER', 'WELFARE_NURSE', 'ADMISSIONS_RECEPTION', 'PROCUREMENT_OFFICER', 'STOREKEEPER', 'EXAMINATION_OFFICER', 'SCHOOL_COUNSELLOR')
+    and extra_permissions <@ array['VIEW_ACADEMICS', 'EDIT_ACADEMICS', 'VIEW_ATTENDANCE', 'MARK_ATTENDANCE', 'VIEW_ASSIGNED_STUDENTS', 'FILL_SUBMIT_REPORT_CARDS', 'VIEW_OWN_PUBLISHED_REPORTS', 'VIEW_COMMUNICATIONS', 'VIEW_ALERTS', 'EDIT_OPERATIONS', 'MANAGE_PROCUREMENT', 'MANAGE_INVENTORY', 'MANAGE_ICT', 'MANAGE_COUNSELLING', 'MANAGE_HEALTH', 'MANAGE_ADMISSIONS', 'MODERATE_EXAMS']::text[]
     and lower(email) <> lower(coalesce((select auth.jwt()) ->> 'email', ''))
   )
 );
@@ -847,62 +963,26 @@ create policy "gsms_comms_manager_delete" on public.gsms_communications
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- OPERATIONS: leadership and relevant operational role, restricted to assigned branches.
+-- OPERATIONS: each specialist can access only the operational record types assigned to its role.
 drop policy if exists "gsms_operations_tenant_isolation" on public.gsms_operations;
+drop policy if exists "gsms_operations_authorized_select" on public.gsms_operations;
+drop policy if exists "gsms_operations_authorized_insert" on public.gsms_operations;
+drop policy if exists "gsms_operations_authorized_update" on public.gsms_operations;
+drop policy if exists "gsms_operations_manager_delete" on public.gsms_operations;
 create policy "gsms_operations_authorized_select" on public.gsms_operations
 for select to authenticated
-using ((
-  public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'ICT_ADMIN'])
-  or (upper(module_type) like '%LIBRARY%' and public.gsms_has_any_role(school_id, array['LIBRARIAN']))
-  or ((upper(module_type) like '%TRANSPORT%' or upper(module_type) in ('VEHICLE', 'ROUTE', 'TRIP')) and public.gsms_has_any_role(school_id, array['TRANSPORT_MANAGER']))
-  or ((upper(module_type) like '%PROCUREMENT%' or upper(module_type) in ('REQUISITION', 'PURCHASE_ORDER', 'VENDOR', 'RFQ')) and public.gsms_has_any_role(school_id, array['PROCUREMENT_OFFICER']))
-  or ((upper(module_type) like '%STORE%' or upper(module_type) in ('STOCK', 'STOCK_ISSUE', 'STOCK_RECEIPT', 'INVENTORY', 'ASSET')) and public.gsms_has_any_role(school_id, array['STOREKEEPER']))
-  or ((upper(module_type) like '%HEALTH%' or upper(module_type) = 'WELFARE') and public.gsms_has_any_role(school_id, array['WELFARE_NURSE']))
-  or (upper(module_type) like '%ADMISSION%' and public.gsms_has_any_role(school_id, array['ADMISSIONS_RECEPTION']))
-  or ((upper(module_type) like '%DISCIPLINE%' or upper(module_type) in ('COUNSELLING', 'INTERVENTION', 'SAFEGUARDING')) and public.gsms_has_any_role(school_id, array['SCHOOL_COUNSELLOR']))
-  or ((upper(module_type) like '%EXAM%' or upper(module_type) = 'MARK_MODERATION') and public.gsms_has_any_role(school_id, array['EXAMINATION_OFFICER']))
-) and public.gsms_can_access_branch(school_id, branch_id));
+using (public.gsms_can_manage_operation(school_id, module_type)
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_operations_authorized_insert" on public.gsms_operations
 for insert to authenticated
-with check ((
-  public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'ICT_ADMIN'])
-  or (upper(module_type) like '%LIBRARY%' and public.gsms_has_any_role(school_id, array['LIBRARIAN']))
-  or ((upper(module_type) like '%TRANSPORT%' or upper(module_type) in ('VEHICLE', 'ROUTE', 'TRIP')) and public.gsms_has_any_role(school_id, array['TRANSPORT_MANAGER']))
-  or ((upper(module_type) like '%PROCUREMENT%' or upper(module_type) in ('REQUISITION', 'PURCHASE_ORDER', 'VENDOR', 'RFQ')) and public.gsms_has_any_role(school_id, array['PROCUREMENT_OFFICER']))
-  or ((upper(module_type) like '%STORE%' or upper(module_type) in ('STOCK', 'STOCK_ISSUE', 'STOCK_RECEIPT', 'INVENTORY', 'ASSET')) and public.gsms_has_any_role(school_id, array['STOREKEEPER']))
-  or ((upper(module_type) like '%HEALTH%' or upper(module_type) = 'WELFARE') and public.gsms_has_any_role(school_id, array['WELFARE_NURSE']))
-  or (upper(module_type) like '%ADMISSION%' and public.gsms_has_any_role(school_id, array['ADMISSIONS_RECEPTION']))
-  or ((upper(module_type) like '%DISCIPLINE%' or upper(module_type) in ('COUNSELLING', 'INTERVENTION', 'SAFEGUARDING')) and public.gsms_has_any_role(school_id, array['SCHOOL_COUNSELLOR']))
-  or ((upper(module_type) like '%EXAM%' or upper(module_type) = 'MARK_MODERATION') and public.gsms_has_any_role(school_id, array['EXAMINATION_OFFICER']))
-) and public.gsms_can_access_branch(school_id, branch_id));
+with check (public.gsms_can_manage_operation(school_id, module_type)
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_operations_authorized_update" on public.gsms_operations
 for update to authenticated
-using ((
-  public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'ICT_ADMIN'])
-  or (upper(module_type) like '%LIBRARY%' and public.gsms_has_any_role(school_id, array['LIBRARIAN']))
-  or ((upper(module_type) like '%TRANSPORT%' or upper(module_type) in ('VEHICLE', 'ROUTE', 'TRIP')) and public.gsms_has_any_role(school_id, array['TRANSPORT_MANAGER']))
-  or ((upper(module_type) like '%PROCUREMENT%' or upper(module_type) in ('REQUISITION', 'PURCHASE_ORDER', 'VENDOR', 'RFQ')) and public.gsms_has_any_role(school_id, array['PROCUREMENT_OFFICER']))
-  or ((upper(module_type) like '%STORE%' or upper(module_type) in ('STOCK', 'STOCK_ISSUE', 'STOCK_RECEIPT', 'INVENTORY', 'ASSET')) and public.gsms_has_any_role(school_id, array['STOREKEEPER']))
-  or ((upper(module_type) like '%HEALTH%' or upper(module_type) = 'WELFARE') and public.gsms_has_any_role(school_id, array['WELFARE_NURSE']))
-  or (upper(module_type) like '%ADMISSION%' and public.gsms_has_any_role(school_id, array['ADMISSIONS_RECEPTION']))
-  or ((upper(module_type) like '%DISCIPLINE%' or upper(module_type) in ('COUNSELLING', 'INTERVENTION', 'SAFEGUARDING')) and public.gsms_has_any_role(school_id, array['SCHOOL_COUNSELLOR']))
-  or ((upper(module_type) like '%EXAM%' or upper(module_type) = 'MARK_MODERATION') and public.gsms_has_any_role(school_id, array['EXAMINATION_OFFICER']))
-) and public.gsms_can_access_branch(school_id, branch_id))
-with check ((
-  public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'ICT_ADMIN'])
-  or (upper(module_type) like '%LIBRARY%' and public.gsms_has_any_role(school_id, array['LIBRARIAN']))
-  or ((upper(module_type) like '%TRANSPORT%' or upper(module_type) in ('VEHICLE', 'ROUTE', 'TRIP')) and public.gsms_has_any_role(school_id, array['TRANSPORT_MANAGER']))
-  or ((upper(module_type) like '%PROCUREMENT%' or upper(module_type) in ('REQUISITION', 'PURCHASE_ORDER', 'VENDOR', 'RFQ')) and public.gsms_has_any_role(school_id, array['PROCUREMENT_OFFICER']))
-  or ((upper(module_type) like '%STORE%' or upper(module_type) in ('STOCK', 'STOCK_ISSUE', 'STOCK_RECEIPT', 'INVENTORY', 'ASSET')) and public.gsms_has_any_role(school_id, array['STOREKEEPER']))
-  or ((upper(module_type) like '%HEALTH%' or upper(module_type) = 'WELFARE') and public.gsms_has_any_role(school_id, array['WELFARE_NURSE']))
-  or (upper(module_type) like '%ADMISSION%' and public.gsms_has_any_role(school_id, array['ADMISSIONS_RECEPTION']))
-  or ((upper(module_type) like '%DISCIPLINE%' or upper(module_type) in ('COUNSELLING', 'INTERVENTION', 'SAFEGUARDING')) and public.gsms_has_any_role(school_id, array['SCHOOL_COUNSELLOR']))
-  or ((upper(module_type) like '%EXAM%' or upper(module_type) = 'MARK_MODERATION') and public.gsms_has_any_role(school_id, array['EXAMINATION_OFFICER']))
-) and public.gsms_can_access_branch(school_id, branch_id));
+using (public.gsms_can_manage_operation(school_id, module_type)
+  and public.gsms_can_access_branch(school_id, branch_id))
+with check (public.gsms_can_manage_operation(school_id, module_type)
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_operations_manager_delete" on public.gsms_operations
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
