@@ -1141,7 +1141,14 @@ create policy "gsms_leave_manager_delete" on public.gsms_leave_requests
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- COMMUNICATIONS: only school leadership and teaching staff can read/write.
+-- COMMUNICATIONS: class-targeted notices are scoped to the teacher's assigned class and linked parents.
+alter table public.gsms_communications
+  add column if not exists target_class text;
+
+create index if not exists idx_gsms_comms_class_scope
+  on public.gsms_communications(school_id, branch_id, target_class)
+  where target_class is not null;
+
 drop policy if exists "gsms_communications_tenant_isolation" on public.gsms_communications;
 create policy "gsms_comms_authorized_select" on public.gsms_communications
 for select to authenticated
@@ -1152,19 +1159,62 @@ using (
     or (
       public.gsms_has_any_role(school_id, array['PARENT'])
       and (upper(audience) like '%PARENT%' or upper(audience) = 'ALL')
+      and (
+        target_class is null
+        or exists (
+          select 1
+          from public.gsms_user_access_assignments a
+          join public.gsms_students s
+            on s.school_id = a.school_id
+           and s.id = any(a.linked_student_ids)
+          where a.school_id = gsms_communications.school_id
+            and a.active = true
+            and a.auth_user_id = (select auth.uid())
+            and lower(s.class_name) = lower(gsms_communications.target_class)
+            and s.branch_id = gsms_communications.branch_id
+        )
+      )
     )
     or (
       public.gsms_has_any_role(school_id, array['STUDENT'])
       and (upper(audience) like '%STUDENT%' or upper(audience) = 'ALL')
+      and (
+        target_class is null
+        or exists (
+          select 1
+          from public.gsms_user_access_assignments a
+          join public.gsms_students s
+            on s.school_id = a.school_id
+           and s.id = any(a.linked_student_ids)
+          where a.school_id = gsms_communications.school_id
+            and a.active = true
+            and a.auth_user_id = (select auth.uid())
+            and lower(s.class_name) = lower(gsms_communications.target_class)
+            and s.branch_id = gsms_communications.branch_id
+        )
+      )
     )
   )
   and public.gsms_can_access_branch(school_id, branch_id)
 );
 create policy "gsms_comms_authorized_insert" on public.gsms_communications
 for insert to authenticated
-with check ((public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER', 'FINANCE_OFFICER', 'HR_MANAGER', 'LIBRARIAN', 'TRANSPORT_MANAGER', 'WELFARE_NURSE', 'ADMISSIONS_RECEPTION', 'PROCUREMENT_OFFICER', 'EXAMINATION_OFFICER', 'SCHOOL_COUNSELLOR']))
-  and public.gsms_can_access_branch(school_id, branch_id));
+with check (
+  (
+    public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'FINANCE_OFFICER', 'HR_MANAGER', 'LIBRARIAN', 'TRANSPORT_MANAGER', 'WELFARE_NURSE', 'ADMISSIONS_RECEPTION', 'PROCUREMENT_OFFICER', 'EXAMINATION_OFFICER', 'SCHOOL_COUNSELLOR'])
+    or (
+      public.gsms_has_any_role(school_id, array['TEACHER', 'CLASS_TEACHER'])
+      and target_class is not null
+      and public.gsms_can_access_class_in_branch(school_id, branch_id, target_class)
+    )
+  )
+  and public.gsms_can_access_branch(school_id, branch_id)
+  and (
+    target_class is null
+    or public.gsms_can_access_class_in_branch(school_id, branch_id, target_class)
+  )
+);
 create policy "gsms_comms_authorized_update" on public.gsms_communications
 for update to authenticated
 using ((public.gsms_is_school_manager(school_id)
