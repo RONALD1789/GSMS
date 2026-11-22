@@ -70,16 +70,18 @@ Also create a second branch A2, a second class P6, and a second student S2.
 13. An unauthenticated/anonymous request must not read or mutate any tenant data.
 14. Parent attendance returns only rows whose student_id is one of the parent's linked student IDs; unlinked legacy attendance and another parent's attendance remain invisible.
 15. Teacher, Class Teacher and other staff roles can submit leave only for the authenticated user's matching staff record; they cannot submit on behalf of another staff member.
-16. Procurement Officer can create/update procurement records but cannot mutate Stores records; Storekeeper can mutate Stores but only read Procurement.
-17. Finance Officer can read Procurement records for oversight but cannot create/update requisitions or purchase orders unless separately delegated MANAGE_PROCUREMENT.
-18. Examination Officer can manage EXAM/EXAM_TIMETABLE/INVIGILATION/MARK_MODERATION records but cannot approve/publish report cards.
-19. School Counsellor can manage counselling/discipline records and read welfare records; Welfare Nurse can manage welfare/hostel records and read counselling/discipline records.
-20. ICT Admin can manage ICT records and provision standard staff/portal roles only; attempts to create School Admin, Headteacher, Deputy Headteacher, Finance Officer, HR Manager or SUPER_ADMIN assignments must fail.
-21. ICT Admin's access to Stores is read-only; they cannot mutate stock or asset records unless separately delegated MANAGE_INVENTORY.
+16. Parent can read only invoices linked to their assigned student IDs; an invoice linked to another student or an unlinked invoice must remain invisible.
+17. Finance Officer can create an invoice only with a valid student_id in the same school and branch; invalid or cross-tenant student links must fail.
+18. Procurement Officer can create/update procurement records but cannot mutate Stores records; Storekeeper can mutate Stores but only read Procurement.
+19. Finance Officer can read Procurement records for oversight but cannot create/update requisitions or purchase orders unless separately delegated MANAGE_PROCUREMENT.
+20. Examination Officer can manage EXAM/EXAM_TIMETABLE/INVIGILATION/MARK_MODERATION records but cannot approve/publish report cards.
+21. School Counsellor can manage counselling/discipline records and read welfare records; Welfare Nurse can manage welfare/hostel records and read counselling/discipline records.
+22. ICT Admin can manage ICT records and provision standard staff/portal roles only; attempts to create School Admin, Headteacher, Deputy Headteacher, Finance Officer, HR Manager or SUPER_ADMIN assignments must fail.
+23. ICT Admin's access to Stores is read-only; they cannot mutate stock or asset records unless separately delegated MANAGE_INVENTORY.
 
 ## Remaining schema / workflow limitations
 
-- Finance rows still need a stable student/guardian relationship before parents can see their own itemized invoices. The parent-safe student summary exposes the cached fee balance only.
+- New invoices now require a stable student_id and are visible to parents only when linked to one of their assigned students. Legacy invoices are backfilled only when the guardian name uniquely identifies one learner in that branch; ambiguous invoices require a finance administrator to link them manually.
 - Communications currently has no `target_class` or recipient-student field. Parent communications remain audience- and branch-scoped; teacher-to-class-parent targeting still needs a schema/UI enhancement.
 - The current report-card status model should be validated against the app's exact workflow before production approval. Teachers are restricted to DRAFT/RETURNED rows and may submit; only leadership can approve/publish.
 - Operational module records now use role-specific labels and status workflows, but inventory quantities, purchase-order line items, exam timetables and ICT ticket SLAs still require dedicated structured fields and end-to-end operational testing.
