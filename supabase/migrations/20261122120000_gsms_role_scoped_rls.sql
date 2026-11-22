@@ -374,36 +374,35 @@ for delete to authenticated
 using (public.gsms_is_school_manager(school_id)
   and public.gsms_can_access_branch(school_id, branch_id));
 
--- ACADEMIC RECORDS: only leadership, exam officers and assigned class teachers.
+-- ACADEMIC RECORDS: leadership and assigned teachers/exam officers, limited to assigned branches.
 drop policy if exists "gsms_academic_records_tenant_isolation" on public.gsms_academic_records;
 create policy "gsms_academics_scoped_select" on public.gsms_academic_records
 for select to authenticated
 using (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name));
 create policy "gsms_academics_scoped_insert" on public.gsms_academic_records
 for insert to authenticated
-with check (public.gsms_can_access_class(school_id, class_name));
+with check (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name));
 create policy "gsms_academics_scoped_update" on public.gsms_academic_records
 for update to authenticated
-using (public.gsms_can_access_class(school_id, class_name))
-with check (public.gsms_can_access_class(school_id, class_name));
+using (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name))
+with check (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name));
 create policy "gsms_academics_manager_delete" on public.gsms_academic_records
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- ATTENDANCE: school leadership and assigned class teachers only. The current attendance
--- schema stores target_name but has no student_id foreign key, so parent/student row access
--- is deliberately denied until a safe student_id column is added.
+-- ATTENDANCE: assigned branch/class access only. No student_id foreign key exists yet,
+-- so parent/student attendance access is deliberately withheld rather than matching names.
 drop policy if exists "gsms_attendance_tenant_isolation" on public.gsms_attendance;
 create policy "gsms_attendance_scoped_select" on public.gsms_attendance
 for select to authenticated
-using (public.gsms_can_access_class(school_id, class_name));
+using (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name));
 create policy "gsms_attendance_scoped_insert" on public.gsms_attendance
 for insert to authenticated
-with check (public.gsms_can_access_class(school_id, class_name));
+with check (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name));
 create policy "gsms_attendance_scoped_update" on public.gsms_attendance
 for update to authenticated
-using (public.gsms_can_access_class(school_id, class_name))
-with check (public.gsms_can_access_class(school_id, class_name));
+using (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name))
+with check (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name));
 create policy "gsms_attendance_manager_delete" on public.gsms_attendance
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
@@ -430,20 +429,22 @@ create policy "gsms_templates_manager_delete" on public.gsms_report_templates
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- REPORT CARDS: teachers may submit drafts for assigned classes; parents/learners only
--- see approved or published reports for linked student IDs.
+-- REPORT CARDS: teachers may submit drafts for assigned classes/branches; parents and
+-- learners see only approved/published reports for linked student IDs.
 drop policy if exists "gsms_report_cards_tenant_isolation" on public.gsms_report_cards;
 create policy "gsms_reports_scoped_select" on public.gsms_report_cards
 for select to authenticated
-using ((public.gsms_can_read_report(school_id, student_id, class_name, status)
-  and public.gsms_can_access_branch(school_id, branch_id)));
+using (
+  public.gsms_can_read_report(school_id, student_id, class_name, status)
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_reports_insert" on public.gsms_report_cards
 for insert to authenticated
 with check (
   public.gsms_is_school_manager(school_id)
   or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER'])
   or (
-    public.gsms_can_access_class(school_id, class_name)
+    public.gsms_can_access_class_in_branch(school_id, branch_id, class_name)
     and public.gsms_has_any_role(school_id, array['TEACHER', 'CLASS_TEACHER'])
     and upper(status) = 'DRAFT'
   )
@@ -454,7 +455,7 @@ using (
   public.gsms_is_school_manager(school_id)
   or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER'])
   or (
-    public.gsms_can_access_class(school_id, class_name)
+    public.gsms_can_access_class_in_branch(school_id, branch_id, class_name)
     and public.gsms_has_any_role(school_id, array['TEACHER', 'CLASS_TEACHER'])
     and upper(status) in ('DRAFT', 'RETURNED')
   )
@@ -463,7 +464,7 @@ with check (
   public.gsms_is_school_manager(school_id)
   or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER'])
   or (
-    public.gsms_can_access_class(school_id, class_name)
+    public.gsms_can_access_class_in_branch(school_id, branch_id, class_name)
     and public.gsms_has_any_role(school_id, array['TEACHER', 'CLASS_TEACHER'])
     and upper(status) in ('DRAFT', 'SUBMITTED')
   )
@@ -472,46 +473,67 @@ create policy "gsms_reports_manager_delete" on public.gsms_report_cards
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- FINANCE: only owner, school admin and finance officers.
+-- FINANCE: owner, school admin and finance officers, scoped to assigned branches.
 drop policy if exists "gsms_finance_entries_tenant_isolation" on public.gsms_finance_entries;
 create policy "gsms_finance_authorized_select" on public.gsms_finance_entries
 for select to authenticated
-using ((public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']))
-  and public.gsms_can_access_branch(school_id, branch_id));
+using (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_finance_authorized_insert" on public.gsms_finance_entries
 for insert to authenticated
-with check (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']));
+with check (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_finance_authorized_update" on public.gsms_finance_entries
 for update to authenticated
-using (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']))
-with check (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']));
+using (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+)
+with check (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_finance_manager_delete" on public.gsms_finance_entries
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- LEAVE: school leadership and HR only. A future schema addition should link a leave
--- request to auth.uid() before allowing staff to read their own leave requests.
+-- LEAVE: leadership and HR only, scoped to assigned branches. A future schema change
+-- should link leave requests to auth.uid() before staff can read their own requests.
 drop policy if exists "gsms_leave_requests_tenant_isolation" on public.gsms_leave_requests;
 create policy "gsms_leave_authorized_select" on public.gsms_leave_requests
 for select to authenticated
-using ((public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'HR_MANAGER']))
-  and public.gsms_can_access_branch(school_id, branch_id));
+using (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'HR_MANAGER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_leave_authorized_insert" on public.gsms_leave_requests
 for insert to authenticated
-with check ((public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HR_MANAGER']))
-  and public.gsms_can_access_branch(school_id, branch_id));
+with check (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HR_MANAGER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_leave_authorized_update" on public.gsms_leave_requests
 for update to authenticated
-using (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'HR_MANAGER']))
-with check (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'HR_MANAGER']));
+using (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'HR_MANAGER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+)
+with check (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'HR_MANAGER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_leave_manager_delete" on public.gsms_leave_requests
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
@@ -596,22 +618,34 @@ create policy "gsms_operations_manager_delete" on public.gsms_operations
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- ALERTS: potentially sensitive risk/welfare data is restricted to leadership.
+-- ALERTS: sensitive risk/welfare data is restricted to school leadership.
 drop policy if exists "gsms_early_warning_alerts_tenant_isolation" on public.gsms_early_warning_alerts;
 create policy "gsms_alerts_leadership_select" on public.gsms_early_warning_alerts
 for select to authenticated
-using (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']));
+using (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_alerts_leadership_insert" on public.gsms_early_warning_alerts
 for insert to authenticated
-with check (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']));
+with check (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_alerts_leadership_update" on public.gsms_early_warning_alerts
 for update to authenticated
-using (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
-with check (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']));
+using (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+)
+with check (
+  (public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_alerts_manager_delete" on public.gsms_early_warning_alerts
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
