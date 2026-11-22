@@ -12,6 +12,7 @@ Refactor in small, reviewable steps. Each step must preserve existing behavior, 
 - [x] Move seed-data implementation into a dedicated data/seed package.
 - [x] Isolate Firestore client configuration in a dedicated Firebase data provider.
 - [x] Extract read-only Firestore snapshot streams into a focused repository while preserving the existing GsmsRepository API.
+- [x] Extract append-only audit event persistence into AuditLogRepository while preserving the existing GsmsRepository helper.
 - [ ] Run the existing unit, instrumentation and Firestore rules test suites in a configured build environment.
 - [ ] Record baseline build and test results before moving implementation files.
 
@@ -81,8 +82,12 @@ Large files identified during inspection include:
 - ui/PortalDashboards.kt (~37 KB)
 - Several feature screens between ~15 KB and ~49 KB
 
-The first code-moving increment moved the seed-data object to data/seed and extracted Firestore client setup to data/firebase/FirestoreProvider.kt. A subsequent increment extracted all existing read-only snapshot stream methods into SchoolStreamsRepository.kt. GsmsRepository retains the same public observe* methods and delegates to the focused class, preserving current call sites and query constraints.
+The first code-moving increment moved the seed-data object to data/seed and extracted Firestore client setup to data/firebase/FirestoreProvider.kt. A subsequent increment extracted all existing read-only snapshot stream methods into SchoolStreamsRepository.kt. GsmsRepository retains the same public observe* methods and delegates to the focused class, preserving current call sites and query constraints. Audit event writes now delegate to AuditLogRepository; callers still use the same private GsmsRepository helper.
 
 The Android build has not been executed in this environment. There is no GitHub Actions workflow configured in the repository, so the changes require a local Gradle build before merge.
 
 The next code-moving pull request should split GsmsRepository by domain while retaining a compatibility facade and preserving Firestore collection paths and security semantics.
+
+## Security issue identified for a separate fix
+
+The current Firestore rules default a missing user profile to `primaryRole: SUPER_ADMIN` and also treat a user map without `primaryRole` as a super administrator. This is a fail-open authorization fallback. It must be changed to deny access when the authenticated user's profile is missing or malformed, with regression tests for missing profiles and legacy profiles. This rules change is intentionally not bundled into the data-layer refactor and must be completed before production deployment.
