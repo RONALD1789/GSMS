@@ -321,24 +321,13 @@ create policy "gsms_academics_manager_delete" on public.gsms_academic_records
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- ATTENDANCE: school leadership and assigned class teachers only.
+-- ATTENDANCE: school leadership and assigned class teachers only. The current attendance
+-- schema stores target_name but has no student_id foreign key, so parent/student row access
+-- is deliberately denied until a safe student_id column is added.
 drop policy if exists "gsms_attendance_tenant_isolation" on public.gsms_attendance;
 create policy "gsms_attendance_scoped_select" on public.gsms_attendance
 for select to authenticated
-using (
-  public.gsms_can_access_class(school_id, class_name)
-  or (
-    upper(coalesce(target_type, '')) = 'STUDENT'
-    and exists (
-      select 1 from public.gsms_user_access_assignments a
-      where a.school_id = gsms_attendance.school_id
-        and a.active = true
-        and lower(a.email) = lower(coalesce((select auth.jwt()) ->> 'email', ''))
-        and upper(a.primary_role) in ('PARENT', 'STUDENT')
-        and target_name = any(a.linked_student_ids)
-    )
-  )
-);
+using (public.gsms_can_access_class(school_id, class_name));
 create policy "gsms_attendance_scoped_insert" on public.gsms_attendance
 for insert to authenticated
 with check (public.gsms_can_access_class(school_id, class_name));
