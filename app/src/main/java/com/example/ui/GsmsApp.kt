@@ -76,7 +76,7 @@ private fun GsmsAuthenticatedShell(
         factory = viewModelFactory {
             initializer {
                 GsmsViewModel(
-                    aiRepository = AiRepository(),
+                    aiRepository = AiRepository(supabaseRepository),
                     currentUserId = currentUserId,
                     userDisplayName = userDisplayName,
                     userEmail = userEmail,
