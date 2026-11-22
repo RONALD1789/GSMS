@@ -680,6 +680,30 @@ class SupabaseSyncRepository(
         ensureSuccess("gsms_audit_logs", api.insertAuditLogs(listOf(log.toSupabaseRow(ownerUid, schoolId))))
     }
 
+    suspend fun generateAiText(prompt: String): Result<String> {
+        val api = apiService ?: return failState(config.validationError ?: "Supabase is not configured.")
+        if (accessToken.isNullOrBlank()) {
+            return Result.failure(SecurityException("Sign in to Supabase before using GSMS AI."))
+        }
+        if (prompt.isBlank() || prompt.length > 24000) {
+            return Result.failure(IllegalArgumentException("AI prompt must contain between 1 and 24,000 characters."))
+        }
+        return try {
+            val response = withContext(Dispatchers.IO) {
+                api.invokeGsmsAi(SupabaseAiRequest(prompt = prompt))
+            }
+            if (!response.isSuccessful) {
+                Result.failure(IllegalStateException(formatHttpError("GSMS AI", response.code(), response.errorBody())))
+            } else {
+                response.body()?.text?.takeIf { it.isNotBlank() }?.let(Result.Companion::success)
+                    ?: Result.failure(IllegalStateException(response.body()?.error ?: "GSMS AI returned an empty response."))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Supabase AI request failed: ${e.javaClass.simpleName}")
+            Result.failure(IllegalStateException("GSMS AI request failed: ${e.localizedMessage ?: "Network error"}"))
+        }
+    }
+
     private suspend fun runPostgrest(op: String, block: suspend (SupabaseApiService) -> Unit): Result<Unit> {
         val api = apiService ?: return Result.failure(IllegalStateException(config.validationError ?: "Supabase Secrets missing."))
         return try {
