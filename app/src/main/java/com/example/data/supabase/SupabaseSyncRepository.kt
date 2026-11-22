@@ -400,6 +400,11 @@ class SupabaseSyncRepository(
                             "gsms_parent_student_summaries",
                             api.fetchParentStudentSummaries(schoolIdFilter = filter)
                         ) { it.toDomain() }
+                    } else if (!isOwner && assignedRole == PortalRole.FINANCE_OFFICER) {
+                        readList(
+                            "gsms_finance_student_summaries",
+                            api.fetchFinanceStudentSummaries(schoolIdFilter = filter)
+                        ) { it.toDomain() }
                     } else {
                         readList(
                             "gsms_students",
