@@ -148,6 +148,23 @@ as $$
   );
 $$;
 
+create or replace function public.gsms_can_provision_school()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select
+    coalesce((select auth.jwt()) -> 'app_metadata' ->> 'gsms_platform_admin', 'false') = 'true'
+    or exists (
+      select 1
+      from public.gsms_schools s
+      where s.supabase_owner_uid = (select auth.uid())
+         or s.owner_id = (select auth.uid())::text
+    );
+$$;
+
 create or replace function public.gsms_has_any_role(
   target_school_id text,
   allowed_roles text[]
@@ -412,6 +429,7 @@ $$;
 
 -- Do not expose helper functions to anonymous clients.
 revoke all on function public.gsms_is_school_owner(text) from public, anon;
+revoke all on function public.gsms_can_provision_school() from public, anon;
 revoke all on function public.gsms_has_any_role(text, text[]) from public, anon;
 revoke all on function public.gsms_is_school_member(text) from public, anon;
 revoke all on function public.gsms_is_school_manager(text) from public, anon;
@@ -426,6 +444,7 @@ revoke all on function public.gsms_current_actor_matches(text, text, text) from 
 revoke all on function public.gsms_can_manage_assignments(text) from public, anon;
 
 grant execute on function public.gsms_is_school_owner(text) to authenticated;
+grant execute on function public.gsms_can_provision_school() to authenticated;
 grant execute on function public.gsms_has_any_role(text, text[]) to authenticated;
 grant execute on function public.gsms_is_school_member(text) to authenticated;
 grant execute on function public.gsms_is_school_manager(text) to authenticated;
@@ -508,7 +527,11 @@ using (public.gsms_is_school_owner(id));
 
 create policy "gsms_schools_owner_insert" on public.gsms_schools
 for insert to authenticated
-with check (supabase_owner_uid = (select auth.uid()));
+with check (
+  supabase_owner_uid = (select auth.uid())
+  and owner_id = (select auth.uid())::text
+  and public.gsms_can_provision_school()
+);
 
 create policy "gsms_schools_owner_update" on public.gsms_schools
 for update to authenticated
