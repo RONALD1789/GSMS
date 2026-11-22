@@ -322,18 +322,6 @@ class GsmsViewModel(
         }
     }
 
-    private fun requireCapability(
-        capability: RoleCapability,
-        actionLabel: String,
-        role: PortalRole = currentActiveRole
-    ): Boolean {
-        if (!role.has(capability)) {
-            _statusBanner.value = "Access denied: ${role.shortTitle} cannot $actionLabel."
-            return false
-        }
-        return true
-    }
-
     private fun buildRoleScopedSummary(w: GsmsWorkspaceState): String {
         val school = w.activeSchool
         val sb = StringBuilder()
@@ -406,19 +394,12 @@ class GsmsViewModel(
                 sb.appendLine("Admissions & Events (${admOps.size}): ${admOps.joinToString { "${it.title} [${it.status}]" }}")
                 sb.appendLine("Enrolled Students Tracked: ${w.students.size}")
             }
-        }
-        return sb.toString()
-    }
-
-    private fun currentActorName(): String = userDisplayName.ifBlank { "GSMS User" }
-
-    private fun launchMutation(block: suspend () -> Result<Any?>) {
-        viewModelScope.launch {
-            val res = block()
-            res.onFailure { err ->
-                _statusBanner.value = err.localizedMessage ?: "Operation failed."
+            else -> {
+                sb.appendLine("Role: ${w.activeRole.displayName}")
+                sb.appendLine("Available scoped records: students=${w.students.size}, staff=${w.staff.size}, operations=${w.operations.size}, messages=${w.communications.size}")
             }
         }
+        return sb.toString()
     }
 
     private companion object { const val TAG = "GsmsViewModel" }
