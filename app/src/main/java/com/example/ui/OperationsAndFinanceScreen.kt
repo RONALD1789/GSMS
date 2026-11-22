@@ -123,7 +123,7 @@ fun OperationsAndFinanceScreen(
                     }
                     ElevatedCard(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(headerTitle, style = MaterialTheme.typography.titleMedium)
                                 Text(
                                     "USD ${totalPaid.toInt()} settled of USD ${totalBilled.toInt()}",
