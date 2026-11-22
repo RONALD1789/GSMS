@@ -196,11 +196,27 @@ class SupabaseWorkspaceController(
         linkedStudentIds: List<String>,
         actorName: String
     ): Result<String> {
+        val normalizedLinkedStudentIds = linkedStudentIds.distinct().take(20)
+        val linkedBranchIds = if (
+            assignment.resolvedRole() == PortalRole.PARENT || assignment.resolvedRole() == PortalRole.STUDENT
+        ) {
+            currentWorkspace()
+                ?.takeIf { it.activeSchool?.id == schoolId }
+                ?.students
+                ?.filter { it.id in normalizedLinkedStudentIds }
+                ?.map { it.branchId }
+                .orEmpty()
+                .filter { it.isNotBlank() }
+                .distinct()
+        } else {
+            assignment.assignedBranchIds
+        }
         val updated = assignment.copy(
+            assignedBranchIds = linkedBranchIds.ifEmpty { assignment.assignedBranchIds },
             extraPermissions = extraPermissions.distinct().take(45),
             assignedClasses = assignedClasses.distinct().take(30),
             assignedSubjects = assignedSubjects.distinct().take(30),
-            linkedStudentIds = linkedStudentIds.distinct().take(20),
+            linkedStudentIds = normalizedLinkedStudentIds,
             updatedBy = actorName.take(100)
         )
         supabase.saveAccessAssignment(updated, userId, schoolId).getOrThrow()
