@@ -557,3 +557,15 @@ fun AuditLog.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: String): Sb
     summary = summary,
     aiAction = aiAction
 )
+
+
+@Keep
+data class SupabaseAiRequest(
+    val prompt: String
+)
+
+@Keep
+data class SupabaseAiResponse(
+    val text: String? = null,
+    val error: String? = null
+)
