@@ -949,13 +949,60 @@ create policy "gsms_reports_manager_delete" on public.gsms_report_cards
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- FINANCE: owner, school admin and finance officers, scoped to assigned branches.
+-- FINANCE: itemized invoices are linked to a stable learner ID; parent access is link-scoped.
+alter table public.gsms_finance_entries
+  add column if not exists student_id text references public.gsms_students(id) on delete set null;
+
+create index if not exists idx_gsms_finance_student_scope
+  on public.gsms_finance_entries(school_id, student_id, entry_type)
+  where student_id is not null;
+
+create or replace view public.gsms_finance_student_summaries
+with (security_barrier = true)
+as
+select
+  s.id,
+  s.school_id,
+  s.branch_id,
+  ''::text as owner_id,
+  s.admission_no,
+  s.full_name,
+  s.class_name,
+  s.stream,
+  s.parent_name,
+  0::double precision as attendance_rate,
+  0::double precision as average_score,
+  s.fee_balance_usd
+from public.gsms_students s
+where (
+  public.gsms_is_school_manager(s.school_id)
+  or public.gsms_has_any_role(s.school_id, array['FINANCE_OFFICER'])
+)
+and public.gsms_can_access_branch(s.school_id, s.branch_id);
+
+revoke all on public.gsms_finance_student_summaries from public, anon;
+grant select on public.gsms_finance_student_summaries to authenticated;
+
 drop policy if exists "gsms_finance_entries_tenant_isolation" on public.gsms_finance_entries;
 create policy "gsms_finance_authorized_select" on public.gsms_finance_entries
 for select to authenticated
 using (
-  (public.gsms_is_school_manager(school_id)
-    or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']))
+  (
+    public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER'])
+    or (
+      upper(entry_type) = 'INVOICE'
+      and student_id is not null
+      and exists (
+        select 1
+        from public.gsms_user_access_assignments a
+        where a.school_id = gsms_finance_entries.school_id
+          and a.active = true
+          and a.auth_user_id = (select auth.uid())
+          and student_id = any(a.linked_student_ids)
+      )
+    )
+  )
   and public.gsms_can_access_branch(school_id, branch_id)
 );
 create policy "gsms_finance_authorized_insert" on public.gsms_finance_entries
@@ -964,6 +1011,15 @@ with check (
   (public.gsms_is_school_manager(school_id)
     or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']))
   and public.gsms_can_access_branch(school_id, branch_id)
+  and (
+    upper(entry_type) <> 'INVOICE'
+    or exists (
+      select 1 from public.gsms_students s
+      where s.id = student_id
+        and s.school_id = gsms_finance_entries.school_id
+        and s.branch_id = gsms_finance_entries.branch_id
+    )
+  )
 );
 create policy "gsms_finance_authorized_update" on public.gsms_finance_entries
 for update to authenticated
