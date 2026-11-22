@@ -379,7 +379,7 @@ revoke all on function public.gsms_can_access_branch(text, text) from public, an
 revoke all on function public.gsms_can_access_class_in_branch(text, text, text) from public, anon;
 revoke all on function public.gsms_can_access_student_in_branch(text, text, text, text) from public, anon;
 revoke all on function public.gsms_can_access_student(text, text, text) from public, anon;
-revoke all on function public.gsms_parent_can_access_student(text, text) from public, anon;
+revoke all on function public.gsms_parent_can_access_student(text, text) from public, anon, authenticated;
 revoke all on function public.gsms_can_read_report(text, text, text, text) from public, anon;
 revoke all on function public.gsms_can_manage_assignments(text) from public, anon;
 
@@ -392,7 +392,6 @@ grant execute on function public.gsms_can_access_branch(text, text) to authentic
 grant execute on function public.gsms_can_access_class_in_branch(text, text, text) to authenticated;
 grant execute on function public.gsms_can_access_student_in_branch(text, text, text, text) to authenticated;
 grant execute on function public.gsms_can_access_student(text, text, text) to authenticated;
-grant execute on function public.gsms_parent_can_access_student(text, text) to authenticated;
 grant execute on function public.gsms_can_read_report(text, text, text, text) to authenticated;
 grant execute on function public.gsms_can_manage_assignments(text) to authenticated;
 
