@@ -427,8 +427,22 @@ class SupabaseSyncRepository(
                     val assignedClasses = matchingAssignment?.assignedClasses.orEmpty()
                     val assignedSubjects = matchingAssignment?.assignedSubjects.orEmpty()
                     val linkedStudentIds = matchingAssignment?.linkedStudentIds.orEmpty()
-                    val resolvedBranch = activeBranchId?.takeIf { id -> branches.any { it.id == id } }
-                        ?: branches.firstOrNull()?.id ?: "branch_main"
+                    val allBranchIds = branches.map { it.id }
+                    val canAccessAllBranches = isOwner || primaryRole in setOf(
+                        PortalRole.SCHOOL_ADMIN,
+                        PortalRole.HEADTEACHER,
+                        PortalRole.DEPUTY_HEADTEACHER
+                    )
+                    val allowedBranchIds = if (canAccessAllBranches) {
+                        allBranchIds
+                    } else {
+                        matchingAssignment?.assignedBranchIds.orEmpty().filter { it in allBranchIds }
+                    }
+                    if (allowedBranchIds.isEmpty()) {
+                        throw SecurityException("Access denied: no active campus branch is assigned to this account.")
+                    }
+                    val resolvedBranch = activeBranchId?.takeIf { it in allowedBranchIds }
+                        ?: allowedBranchIds.first()
 
                     val profile = UserProfile(
                         id = session.userId,
@@ -440,7 +454,7 @@ class SupabaseSyncRepository(
                         activeBranchId = resolvedBranch,
                         activeRole = effectiveRole.name,
                         assignedSchoolId = schoolId,
-                        assignedBranchIds = matchingAssignment?.assignedBranchIds ?: branches.map { it.id }.ifEmpty { listOf("branch_main") },
+                        assignedBranchIds = allowedBranchIds,
                         assignedClasses = assignedClasses,
                         assignedSubjects = assignedSubjects,
                         linkedStudentIds = linkedStudentIds,
