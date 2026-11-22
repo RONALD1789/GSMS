@@ -446,7 +446,7 @@ with (security_barrier = true)
 as
 select
   s.id,
-  case when public.gsms_is_school_owner(s.id) then s.owner_id else ''::text end as owner_id,
+  case when public.gsms_is_school_owner(s.id) then (select auth.uid())::text else ''::text end as owner_id,
   case when public.gsms_is_school_owner(s.id) then s.supabase_owner_uid else null::uuid end as supabase_owner_uid,
   s.name,
   s.code,
