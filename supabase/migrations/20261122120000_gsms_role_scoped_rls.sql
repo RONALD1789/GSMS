@@ -103,6 +103,64 @@ as $$
     );
 $$;
 
+create or replace function public.gsms_can_access_branch(
+  target_school_id text,
+  target_branch_id text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select
+    public.gsms_is_school_manager(target_school_id)
+    or public.gsms_has_any_role(
+      target_school_id,
+      array['HEADTEACHER', 'DEPUTY_HEADTEACHER']
+    )
+    or exists (
+      select 1
+      from public.gsms_user_access_assignments a
+      where a.school_id = target_school_id
+        and a.active = true
+        and lower(a.email) = lower(coalesce((select auth.jwt()) ->> 'email', ''))
+        and target_branch_id is not null
+        and target_branch_id = any(a.assigned_branch_ids)
+    );
+$;
+
+create or replace function public.gsms_can_access_class_in_branch(
+  target_school_id text,
+  target_branch_id text,
+  target_class_name text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select public.gsms_can_access_branch(target_school_id, target_branch_id)
+     and public.gsms_can_access_class(target_school_id, target_class_name);
+$;
+
+create or replace function public.gsms_can_access_student_in_branch(
+  target_school_id text,
+  target_branch_id text,
+  target_student_id text,
+  target_class_name text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select public.gsms_can_access_branch(target_school_id, target_branch_id)
+     and public.gsms_can_access_student(target_school_id, target_student_id, target_class_name);
+$;
+
 create or replace function public.gsms_can_access_student(
   target_school_id text,
   target_student_id text,
@@ -181,6 +239,9 @@ revoke all on function public.gsms_has_any_role(text, text[]) from public, anon;
 revoke all on function public.gsms_is_school_member(text) from public, anon;
 revoke all on function public.gsms_is_school_manager(text) from public, anon;
 revoke all on function public.gsms_can_access_class(text, text) from public, anon;
+revoke all on function public.gsms_can_access_branch(text, text) from public, anon;
+revoke all on function public.gsms_can_access_class_in_branch(text, text, text) from public, anon;
+revoke all on function public.gsms_can_access_student_in_branch(text, text, text, text) from public, anon;
 revoke all on function public.gsms_can_access_student(text, text, text) from public, anon;
 revoke all on function public.gsms_can_read_report(text, text, text, text) from public, anon;
 revoke all on function public.gsms_can_manage_assignments(text) from public, anon;
@@ -190,6 +251,9 @@ grant execute on function public.gsms_has_any_role(text, text[]) to authenticate
 grant execute on function public.gsms_is_school_member(text) to authenticated;
 grant execute on function public.gsms_is_school_manager(text) to authenticated;
 grant execute on function public.gsms_can_access_class(text, text) to authenticated;
+grant execute on function public.gsms_can_access_branch(text, text) to authenticated;
+grant execute on function public.gsms_can_access_class_in_branch(text, text, text) to authenticated;
+grant execute on function public.gsms_can_access_student_in_branch(text, text, text, text) to authenticated;
 grant execute on function public.gsms_can_access_student(text, text, text) to authenticated;
 grant execute on function public.gsms_can_read_report(text, text, text, text) to authenticated;
 grant execute on function public.gsms_can_manage_assignments(text) to authenticated;
@@ -273,7 +337,7 @@ using (public.gsms_is_school_manager(school_id));
 drop policy if exists "gsms_students_tenant_isolation" on public.gsms_students;
 create policy "gsms_students_scoped_select" on public.gsms_students
 for select to authenticated
-using (public.gsms_can_access_student(school_id, id, class_name));
+using (public.gsms_can_access_student_in_branch(school_id, branch_id, id, class_name));
 create policy "gsms_students_manager_insert" on public.gsms_students
 for insert to authenticated
 with check (public.gsms_is_school_manager(school_id));
@@ -289,27 +353,32 @@ using (public.gsms_is_school_manager(school_id));
 drop policy if exists "gsms_staff_tenant_isolation" on public.gsms_staff;
 create policy "gsms_staff_authorized_select" on public.gsms_staff
 for select to authenticated
-using (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'HR_MANAGER']));
+using ((public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'HR_MANAGER']))
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_staff_authorized_insert" on public.gsms_staff
 for insert to authenticated
-with check (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HR_MANAGER']));
+with check ((public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['HR_MANAGER']))
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_staff_authorized_update" on public.gsms_staff
 for update to authenticated
-using (public.gsms_is_school_manager(school_id)
+using ((public.gsms_is_school_manager(school_id)
   or public.gsms_has_any_role(school_id, array['HR_MANAGER']))
-with check (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HR_MANAGER']));
+  and public.gsms_can_access_branch(school_id, branch_id))
+with check ((public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['HR_MANAGER']))
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_staff_authorized_delete" on public.gsms_staff
 for delete to authenticated
-using (public.gsms_is_school_manager(school_id));
+using (public.gsms_is_school_manager(school_id)
+  and public.gsms_can_access_branch(school_id, branch_id));
 
 -- ACADEMIC RECORDS: only leadership, exam officers and assigned class teachers.
 drop policy if exists "gsms_academic_records_tenant_isolation" on public.gsms_academic_records;
 create policy "gsms_academics_scoped_select" on public.gsms_academic_records
 for select to authenticated
-using (public.gsms_can_access_class(school_id, class_name));
+using (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name));
 create policy "gsms_academics_scoped_insert" on public.gsms_academic_records
 for insert to authenticated
 with check (public.gsms_can_access_class(school_id, class_name));
@@ -366,7 +435,8 @@ using (public.gsms_is_school_manager(school_id));
 drop policy if exists "gsms_report_cards_tenant_isolation" on public.gsms_report_cards;
 create policy "gsms_reports_scoped_select" on public.gsms_report_cards
 for select to authenticated
-using (public.gsms_can_read_report(school_id, student_id, class_name, status));
+using ((public.gsms_can_read_report(school_id, student_id, class_name, status)
+  and public.gsms_can_access_branch(school_id, branch_id)));
 create policy "gsms_reports_insert" on public.gsms_report_cards
 for insert to authenticated
 with check (
@@ -406,8 +476,9 @@ using (public.gsms_is_school_manager(school_id));
 drop policy if exists "gsms_finance_entries_tenant_isolation" on public.gsms_finance_entries;
 create policy "gsms_finance_authorized_select" on public.gsms_finance_entries
 for select to authenticated
-using (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']));
+using ((public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']))
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_finance_authorized_insert" on public.gsms_finance_entries
 for insert to authenticated
 with check (public.gsms_is_school_manager(school_id)
@@ -427,12 +498,14 @@ using (public.gsms_is_school_manager(school_id));
 drop policy if exists "gsms_leave_requests_tenant_isolation" on public.gsms_leave_requests;
 create policy "gsms_leave_authorized_select" on public.gsms_leave_requests
 for select to authenticated
-using (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'HR_MANAGER']));
+using ((public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'HR_MANAGER']))
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_leave_authorized_insert" on public.gsms_leave_requests
 for insert to authenticated
-with check (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HR_MANAGER']));
+with check ((public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['HR_MANAGER']))
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_leave_authorized_update" on public.gsms_leave_requests
 for update to authenticated
 using (public.gsms_is_school_manager(school_id)
@@ -447,18 +520,22 @@ using (public.gsms_is_school_manager(school_id));
 drop policy if exists "gsms_communications_tenant_isolation" on public.gsms_communications;
 create policy "gsms_comms_authorized_select" on public.gsms_communications
 for select to authenticated
-using (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER']));
+using ((public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER']))
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_comms_authorized_insert" on public.gsms_communications
 for insert to authenticated
-with check (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER']));
+with check ((public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER']))
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_comms_authorized_update" on public.gsms_communications
 for update to authenticated
-using (public.gsms_is_school_manager(school_id)
+using ((public.gsms_is_school_manager(school_id)
   or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
-with check (public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']));
+  and public.gsms_can_access_branch(school_id, branch_id))
+with check ((public.gsms_is_school_manager(school_id)
+  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER']))
+  and public.gsms_can_access_branch(school_id, branch_id));
 create policy "gsms_comms_manager_delete" on public.gsms_communications
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
