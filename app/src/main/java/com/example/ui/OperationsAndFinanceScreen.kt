@@ -231,6 +231,31 @@ fun OperationsAndFinanceScreen(
                                 if (!op.notes.isNullOrBlank()) {
                                     Text(op.notes, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
+                                if (canEditOps) {
+                                    val nextStatus = when (op.status.uppercase()) {
+                                        "ACTIVE", "OPEN", "PENDING", "SUBMITTED" -> "IN_PROGRESS"
+                                        "IN_PROGRESS", "UNDER_REVIEW", "APPROVED" -> "COMPLETED"
+                                        "COMPLETED", "CLOSED", "REJECTED" -> "ACTIVE"
+                                        else -> "COMPLETED"
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { viewModel.updateOperationStatus(school.id, op, nextStatus, role) },
+                                            modifier = Modifier.minimumInteractiveComponentSize()
+                                        ) {
+                                            Text(
+                                                when (nextStatus) {
+                                                    "IN_PROGRESS" -> "Start / Review"
+                                                    "COMPLETED" -> "Mark Complete"
+                                                    else -> "Reopen"
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
