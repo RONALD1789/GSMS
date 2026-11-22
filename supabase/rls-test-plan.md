@@ -62,6 +62,7 @@ Also create a second branch A2, a second class P6, and a second student S2.
 
 - Attendance needs a `student_id` foreign key before parents/learners can safely see individual attendance.
 - Finance rows need a stable student/guardian relationship before parents can see their own invoices or balances. The student summary view currently exposes the cached `fee_balance_usd` only.
+- Communications currently has no `target_class` or recipient-student field. Parent communications are audience- and branch-scoped; teacher-to-class-parent targeting needs a schema/UI enhancement.
 - Leave requests need an `auth_user_id`/staff-account relationship before staff can see their own leave requests.
 - The current report-card status model should be validated against the app's exact workflow before production approval. Teachers are restricted to DRAFT/RETURNED rows and may submit; only leadership can approve/publish.
 - Operational `module_type` values must be checked against actual values emitted by the app. A mismatch can deny an otherwise valid operational role.
