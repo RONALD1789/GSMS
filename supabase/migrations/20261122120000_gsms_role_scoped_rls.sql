@@ -6,6 +6,67 @@
 
 begin;
 
+-- Bind staff/parent assignments to the immutable Supabase Auth user UUID.
+-- Email is used only to link an assignment at provisioning time, never as the runtime identity.
+alter table public.gsms_user_access_assignments
+  add column if not exists auth_user_id uuid references auth.users(id) on delete cascade;
+
+update public.gsms_user_access_assignments a
+set auth_user_id = u.id
+from auth.users u
+where a.auth_user_id is null
+  and lower(a.email) = lower(u.email);
+
+create index if not exists idx_gsms_access_auth_user_school
+  on public.gsms_user_access_assignments(auth_user_id, school_id)
+  where active = true;
+
+create or replace function public.gsms_link_assignment_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth, pg_temp
+as $$
+begin
+  select u.id
+    into new.auth_user_id
+  from auth.users u
+  where lower(u.email) = lower(new.email)
+  limit 1;
+  return new;
+end;
+$$;
+
+drop trigger if exists gsms_link_assignment_auth_user on public.gsms_user_access_assignments;
+create trigger gsms_link_assignment_auth_user
+before insert or update of email on public.gsms_user_access_assignments
+for each row execute function public.gsms_link_assignment_auth_user();
+
+create or replace function public.gsms_link_new_auth_user_to_gsms_assignments()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth, pg_temp
+as $$
+begin
+  if new.email is not null then
+    update public.gsms_user_access_assignments
+    set auth_user_id = new.id
+    where auth_user_id is null
+      and lower(email) = lower(new.email);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists gsms_link_new_auth_user_to_assignments on auth.users;
+create trigger gsms_link_new_auth_user_to_assignments
+after insert or update of email on auth.users
+for each row execute function public.gsms_link_new_auth_user_to_gsms_assignments();
+
+revoke all on function public.gsms_link_assignment_auth_user() from public, anon, authenticated;
+revoke all on function public.gsms_link_new_auth_user_to_gsms_assignments() from public, anon, authenticated;
+
 -- SECURITY DEFINER helpers avoid recursive RLS evaluation when checking assignments.
 -- Fixed search_path prevents object-shadowing attacks.
 create or replace function public.gsms_is_school_owner(target_school_id text)
@@ -41,7 +102,7 @@ as $$
     from public.gsms_user_access_assignments a
     where a.school_id = target_school_id
       and a.active = true
-      and lower(a.email) = lower(coalesce((select auth.jwt()) ->> 'email', ''))
+      and a.auth_user_id = (select auth.uid())
       and upper(a.primary_role) = any (allowed_roles)
   );
 $$;
@@ -59,7 +120,7 @@ as $$
         from public.gsms_user_access_assignments a
         where a.school_id = target_school_id
           and a.active = true
-          and lower(a.email) = lower(coalesce((select auth.jwt()) ->> 'email', ''))
+          and a.auth_user_id = (select auth.uid())
       );
 $$;
 
@@ -95,7 +156,7 @@ as $$
       from public.gsms_user_access_assignments a
       where a.school_id = target_school_id
         and a.active = true
-        and lower(a.email) = lower(coalesce((select auth.jwt()) ->> 'email', ''))
+        and a.auth_user_id = (select auth.uid())
         and upper(a.primary_role) in ('TEACHER', 'CLASS_TEACHER', 'EXAMINATION_OFFICER')
         and target_class_name is not null
         and exists (
@@ -127,7 +188,7 @@ as $$
       from public.gsms_user_access_assignments a
       where a.school_id = target_school_id
         and a.active = true
-        and lower(a.email) = lower(coalesce((select auth.jwt()) ->> 'email', ''))
+        and a.auth_user_id = (select auth.uid())
         and target_branch_id is not null
         and target_branch_id = any(a.assigned_branch_ids)
     );
@@ -173,7 +234,7 @@ as $$
       from public.gsms_user_access_assignments a
       where a.school_id = target_school_id
         and a.active = true
-        and lower(a.email) = lower(coalesce((select auth.jwt()) ->> 'email', ''))
+        and a.auth_user_id = (select auth.uid())
         and upper(a.primary_role) in ('PARENT', 'STUDENT')
         and target_student_id = any(a.linked_student_ids)
     );
@@ -221,7 +282,7 @@ as $$
         from public.gsms_user_access_assignments a
         where a.school_id = target_school_id
           and a.active = true
-          and lower(a.email) = lower(coalesce((select auth.jwt()) ->> 'email', ''))
+          and a.auth_user_id = (select auth.uid())
           and upper(a.primary_role) in ('PARENT', 'STUDENT')
           and target_student_id = any(a.linked_student_ids)
       )
@@ -314,7 +375,7 @@ create policy "gsms_assignments_select" on public.gsms_user_access_assignments
 for select to authenticated
 using (
   public.gsms_is_school_manager(school_id)
-  or lower(email) = lower(coalesce((select auth.jwt()) ->> 'email', ''))
+  or auth_user_id = (select auth.uid())
 );
 create policy "gsms_assignments_manager_insert" on public.gsms_user_access_assignments
 for insert to authenticated
