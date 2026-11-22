@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("/fonts/plus_jakarta_sans.ttf") format("truetype");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter.ttf") format("truetype");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains_mono.ttf") format("truetype");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --oxford-navy: #0F2537;
+  --oxford-navy-dark: #091826;
+  --cobalt-blue: #1D4ED8;
+  --cobalt-light: #DBEAFE;
+  --emerald-teal: #059669;
+  --emerald-soft: #D1FAE5;
+  --warm-amber: #D97706;
+  --amber-soft: #FEF3C7;
+  --crimson-red: #DC2626;
+  --crimson-soft: #FEE2E2;
+  --violet-ai: #7C3AED;
+  --violet-soft: #EDE9FE;
+  --alabaster-bg: #F5F7FB;
+  --slate-border: #D0D9E4;
+}
+
+body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  background-color: var(--alabaster-bg);
+  color: #0F172A;
+}
+
+h1, h2, h3, .font-display {
+  font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+}
+
+.font-mono-num {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
