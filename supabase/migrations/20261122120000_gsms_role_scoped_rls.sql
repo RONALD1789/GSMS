@@ -21,6 +21,29 @@ create index if not exists idx_gsms_access_auth_user_school
   on public.gsms_user_access_assignments(auth_user_id, school_id)
   where active = true;
 
+-- Older GSMS app versions wrote the placeholder branch_main even when the actual
+-- main-campus ID was generated dynamically. Resolve that placeholder to the real ID.
+update public.gsms_user_access_assignments a
+set assigned_branch_ids = (
+  select array_agg(b.id order by b.id)
+  from public.gsms_branches b
+  where b.school_id = a.school_id
+    and b.main_campus = true
+)
+where (
+    cardinality(a.assigned_branch_ids) = 0
+    or a.assigned_branch_ids = array['branch_main']::text[]
+  )
+  and exists (
+    select 1 from public.gsms_branches b
+    where b.school_id = a.school_id
+      and b.main_campus = true
+      and b.id <> 'branch_main'
+  );
+
+alter table public.gsms_user_access_assignments
+  alter column assigned_branch_ids set default array[]::text[];
+
 create or replace function public.gsms_link_assignment_auth_user()
 returns trigger
 language plpgsql
@@ -33,13 +56,32 @@ begin
   from auth.users u
   where lower(u.email) = lower(new.email)
   limit 1;
+
+  if coalesce(cardinality(new.assigned_branch_ids), 0) = 0
+     or (
+       new.assigned_branch_ids = array['branch_main']::text[]
+       and not exists (
+         select 1 from public.gsms_branches b
+         where b.school_id = new.school_id and b.id = 'branch_main'
+       )
+     ) then
+    select array_agg(b.id order by b.id)
+      into new.assigned_branch_ids
+    from public.gsms_branches b
+    where b.school_id = new.school_id and b.main_campus = true;
+
+    if new.assigned_branch_ids is null then
+      new.assigned_branch_ids := array['branch_main']::text[];
+    end if;
+  end if;
+
   return new;
 end;
 $$;
 
 drop trigger if exists gsms_link_assignment_auth_user on public.gsms_user_access_assignments;
 create trigger gsms_link_assignment_auth_user
-before insert or update of email on public.gsms_user_access_assignments
+before insert or update on public.gsms_user_access_assignments
 for each row execute function public.gsms_link_assignment_auth_user();
 
 create or replace function public.gsms_link_new_auth_user_to_gsms_assignments()
