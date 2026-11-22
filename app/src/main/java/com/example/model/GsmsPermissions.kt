@@ -235,7 +235,7 @@ object RolePolicy {
         PortalRole.CLASS_TEACHER to setOf(
             RoleCapability.VIEW_ACADEMICS, RoleCapability.EDIT_ACADEMICS,
             RoleCapability.VIEW_ATTENDANCE, RoleCapability.MARK_ATTENDANCE,
-            RoleCapability.FILL_SUBMIT_REPORT_CARDS, RoleCapability.VIEW_ASSIGNED_STUDENTS, RoleCapability.VIEW_REPORT_TEMPLATES,
+            RoleCapability.FILL_SUBMIT_REPORT_CARDS, RoleCapability.VIEW_ASSIGNED_STUDENTS, RoleCapability.APPLY_LEAVE, RoleCapability.VIEW_REPORT_TEMPLATES,
             RoleCapability.VIEW_ALERTS, RoleCapability.MANAGE_ALERTS,
             RoleCapability.VIEW_COMMUNICATIONS, RoleCapability.COMPOSE_COMMUNICATIONS
         ),
