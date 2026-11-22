@@ -27,7 +27,7 @@ Also create a second branch A2, a second class P6, and a second student S2.
 | School A School Admin | Manage permitted school operations and assignments; cannot grant SUPER_ADMIN or change own assignment |
 | Headteacher | School-wide academic/report leadership access; can review and approve report cards |
 | Teacher | Can register and access students only in assigned branch/class; can manage class academics, attendance and reports, submit drafts, but cannot approve/publish |
-| Parent | Only linked student summaries, APPROVED/PUBLISHED reports and parent-audience communications; no internal risk/welfare fields, school revenue/subscription metrics, finance, staff, alerts or unrelated learners |
+| Parent | Linked student summaries, linked invoices, linked attendance, APPROVED/PUBLISHED reports and parent-audience communications; no internal risk/welfare fields, school revenue/subscription metrics, staff, alerts or unrelated learners |
 | Finance Officer | Finance records only in assigned branch |
 | HR Manager | Staff and leave records only in assigned branch |
 | Librarian | LIBRARY operations and own leave request in assigned branch |
