@@ -172,6 +172,7 @@ object RolePolicy {
             RoleCapability.VIEW_COMMUNICATIONS
         ),
         PortalRole.FINANCE_OFFICER to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.VIEW_FINANCE_ALL,
             RoleCapability.RECORD_FINANCE_PAYMENT,
             RoleCapability.VIEW_ANALYTICS_CHARTS,
@@ -181,11 +182,13 @@ object RolePolicy {
             RoleCapability.COMPOSE_COMMUNICATIONS
         ),
         PortalRole.LIBRARIAN to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.EDIT_OPERATIONS,
             RoleCapability.VIEW_COMMUNICATIONS,
             RoleCapability.COMPOSE_COMMUNICATIONS
         ),
         PortalRole.TRANSPORT_MANAGER to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.EDIT_OPERATIONS,
             RoleCapability.VIEW_ALERTS,
             RoleCapability.MANAGE_ALERTS,
@@ -205,6 +208,7 @@ object RolePolicy {
             RoleCapability.COMPOSE_COMMUNICATIONS
         ),
         PortalRole.WELFARE_NURSE to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.VIEW_ALL_STUDENTS,
             RoleCapability.VIEW_ATTENDANCE,
             RoleCapability.EDIT_OPERATIONS,
@@ -215,6 +219,7 @@ object RolePolicy {
             RoleCapability.MANAGE_HEALTH
         ),
         PortalRole.ADMISSIONS_RECEPTION to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.VIEW_ALL_STUDENTS,
             RoleCapability.ENROLL_STUDENT,
             RoleCapability.EDIT_OPERATIONS,
@@ -223,6 +228,7 @@ object RolePolicy {
             RoleCapability.MANAGE_ADMISSIONS
         ),
         PortalRole.DEPUTY_HEADTEACHER to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.VIEW_ACADEMICS, RoleCapability.EDIT_ACADEMICS,
             RoleCapability.VIEW_ATTENDANCE, RoleCapability.MARK_ATTENDANCE,
             RoleCapability.VIEW_ALL_REPORT_CARDS, RoleCapability.APPROVE_PUBLISH_REPORT_CARDS,
@@ -240,17 +246,20 @@ object RolePolicy {
             RoleCapability.VIEW_COMMUNICATIONS, RoleCapability.COMPOSE_COMMUNICATIONS
         ),
         PortalRole.PROCUREMENT_OFFICER to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_ALERTS,
             RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_ANALYTICS_CHARTS,
             RoleCapability.VIEW_COMMUNICATIONS, RoleCapability.COMPOSE_COMMUNICATIONS,
             RoleCapability.MANAGE_PROCUREMENT
         ),
         PortalRole.STOREKEEPER to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_ALERTS,
             RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_ANALYTICS_CHARTS,
             RoleCapability.MANAGE_INVENTORY
         ),
         PortalRole.EXAMINATION_OFFICER to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.VIEW_ACADEMICS, RoleCapability.EDIT_ACADEMICS,
             RoleCapability.VIEW_ATTENDANCE, RoleCapability.VIEW_ALL_REPORT_CARDS,
             RoleCapability.FILL_SUBMIT_REPORT_CARDS, RoleCapability.VIEW_REPORT_TEMPLATES,
@@ -259,12 +268,14 @@ object RolePolicy {
             RoleCapability.MODERATE_EXAMS
         ),
         PortalRole.SCHOOL_COUNSELLOR to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.VIEW_ALL_STUDENTS, RoleCapability.VIEW_ATTENDANCE,
             RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_ALERTS,
             RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_COMMUNICATIONS,
             RoleCapability.COMPOSE_COMMUNICATIONS, RoleCapability.MANAGE_COUNSELLING
         ),
         PortalRole.ICT_ADMIN to setOf(
+            RoleCapability.APPLY_LEAVE,
             RoleCapability.EDIT_OPERATIONS, RoleCapability.VIEW_AUDIT_LOGS,
             RoleCapability.VIEW_ALERTS, RoleCapability.MANAGE_ALERTS,
             RoleCapability.VIEW_ANALYTICS_CHARTS,
