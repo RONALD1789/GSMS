@@ -216,7 +216,9 @@ class GsmsViewModel(
 
     fun refreshSupabaseCounts() {
         viewModelScope.launch {
-            supabaseRepository.refreshCounts().onFailure {
+            ((uiState.value as? UiState.Success)?.data?.activeSchool?.id
+                ?.let { supabaseRepository.pullSchoolCounts(it) }
+                ?: Result.failure(IllegalStateException("No active school is selected."))).onFailure {
                 _statusBanner.value = it.localizedMessage ?: "Could not refresh Supabase counts."
             }.onSuccess { counts -> _statusBanner.value = "Verified counts for ${counts.size} Supabase tables." }
         }
