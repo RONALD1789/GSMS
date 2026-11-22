@@ -1003,7 +1003,7 @@ as $$
     where a.school_id = target_school_id
       and a.active = true
       and a.auth_user_id = (select auth.uid())
-      and upper(a.primary_role) in ('HEADTEACHER', 'TEACHER', 'CLASS_TEACHER', 'HR_MANAGER')
+      and upper(a.primary_role) in ('HEADTEACHER', 'DEPUTY_HEADTEACHER', 'TEACHER', 'CLASS_TEACHER', 'FINANCE_OFFICER', 'HR_MANAGER', 'LIBRARIAN', 'TRANSPORT_MANAGER', 'WELFARE_NURSE', 'ADMISSIONS_RECEPTION', 'PROCUREMENT_OFFICER', 'STOREKEEPER', 'EXAMINATION_OFFICER', 'SCHOOL_COUNSELLOR', 'ICT_ADMIN')
       and lower(a.full_name) = lower(coalesce(target_staff_name, ''))
   );
 $$;
@@ -1031,7 +1031,6 @@ for insert to authenticated
 with check (
   (
     public.gsms_is_school_manager(school_id)
-    or public.gsms_has_any_role(school_id, array['HR_MANAGER'])
     or public.gsms_can_apply_own_leave(school_id, staff_id, staff_name)
   )
   and public.gsms_can_access_branch(school_id, branch_id)
