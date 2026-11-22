@@ -878,8 +878,10 @@ class SupabaseSyncRepository(
             return role == PortalRole.SUPER_ADMIN ||
                 role == PortalRole.SCHOOL_ADMIN ||
                 role == PortalRole.ICT_ADMIN ||
-                role.has(RoleCapability.MANAGE_MODULES, extra) ||
-                role.has(RoleCapability.MANAGE_USER_PERMISSIONS, extra)
+                role.has(RoleCapability.MANAGE_MODULES) ||
+                RoleCapability.MANAGE_MODULES in extra ||
+                role.has(RoleCapability.MANAGE_USER_PERMISSIONS) ||
+                RoleCapability.MANAGE_USER_PERMISSIONS in extra
         }
     }
 }
