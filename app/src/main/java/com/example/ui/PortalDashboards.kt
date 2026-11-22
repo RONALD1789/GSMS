@@ -682,6 +682,15 @@ private fun PublishedReportDownloadSection(
                     }
                 }
             }
+            else -> {
+                item {
+                    EmptyStateCard(
+                        Icons.Rounded.Dashboard,
+                        "${role.shortTitle} workspace",
+                        "Your role is recognized. Role-specific dashboard cards will appear here as this workspace is completed."
+                    )
+                }
+            }
         }
     }
 }
