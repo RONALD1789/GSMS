@@ -24,7 +24,7 @@ fun PeopleAndLeaveScreen(
     val school = workspace.activeSchool ?: return
     val role = workspace.activeRole
     val tabs = remember(role, school.enabledModules) {
-        RolePolicy.peopleSubTabs(role, school)
+        RolePolicy.peopleSubTabs(role, school, workspace.activeExtraCapabilities)
     }
     var selectedTab by remember(tabs) { mutableIntStateOf(0) }
     var showEnrollDialog by remember { mutableStateOf(false) }
