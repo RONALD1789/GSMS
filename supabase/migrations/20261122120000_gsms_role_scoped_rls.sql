@@ -484,7 +484,7 @@ for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
 -- USER ACCESS ASSIGNMENTS: users may read their own assignment. School managers may
--- read/manage all assignments. Non-owners cannot grant SUPER_ADMIN or edit their own role.
+-- read/manage all assignments. SUPER_ADMIN is reserved for the verified owner session, not an assignment.
 drop policy if exists "gsms_user_access_assignments_tenant_isolation" on public.gsms_user_access_assignments;
 create policy "gsms_assignments_select" on public.gsms_user_access_assignments
 for select to authenticated
