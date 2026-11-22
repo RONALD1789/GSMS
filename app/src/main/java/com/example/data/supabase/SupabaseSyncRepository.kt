@@ -290,18 +290,11 @@ class SupabaseSyncRepository(
             }
             val remoteSchools = schoolsResp.body().orEmpty().map { it.toDomain() }
             if (remoteSchools.isEmpty()) {
-                val starter = SupabaseSeedData.buildInitialWorkspaceState(
-                    uid = session.userId,
-                    displayName = session.displayName,
-                    email = session.email
+                return Result.failure(
+                    SecurityException(
+                        "No school workspace is assigned to this account. Ask your GSMS system administrator to provision your school access."
+                    )
                 )
-                pushWorkspace(
-                    workspace = starter,
-                    ownerUid = session.userId,
-                    actorRole = PortalRole.SUPER_ADMIN,
-                    actorExtra = emptySet()
-                ).onFailure { return Result.failure(it) }
-                return Result.success(starter)
             }
 
             val firstSchoolId = remoteSchools.first().id
@@ -359,12 +352,19 @@ class SupabaseSyncRepository(
                         it.active && it.email.equals(session.email, ignoreCase = true)
                     }
                     val isOwner = activeSchool.ownerId == session.userId
-                    val primaryRole = if (matchingAssignment != null && !isOwner) {
-                        matchingAssignment.resolvedRole()
-                    } else {
-                        PortalRole.SUPER_ADMIN
+                    if (!isOwner && matchingAssignment == null) {
+                        throw SecurityException(
+                            "Access denied: this account has no active access assignment for ${activeSchool.name}."
+                        )
                     }
-                    val effectiveRole = if (primaryRole == PortalRole.SUPER_ADMIN) {
+                    val primaryRole = if (isOwner) {
+                        PortalRole.SUPER_ADMIN
+                    } else {
+                        matchingAssignment!!.resolvedRole()
+                    }
+                    // Only a verified school owner may switch between portal views.
+                    // Delegated users remain constrained to their assigned primary role.
+                    val effectiveRole = if (isOwner) {
                         roleOverride ?: PortalRole.SCHOOL_ADMIN
                     } else {
                         primaryRole
