@@ -334,6 +334,8 @@ object RolePolicy {
             }
             if (has(role, RoleCapability.VIEW_LEAVE_WORKFLOW) && school.hasModule(GsmsModule.LEAVE_MANAGEMENT)) {
                 add("Leave Workflow")
+            } else if (has(role, RoleCapability.APPLY_LEAVE) && school.hasModule(GsmsModule.LEAVE_MANAGEMENT)) {
+                add("My Leave")
             }
         }
     }
@@ -354,6 +356,7 @@ object RolePolicy {
         if (RoleCapability.VIEW_ASSIGNED_STUDENTS in extra && tabs.none { it == "Students" || it == "My Assigned Students" }) tabs.add(0, "My Assigned Students")
         if (RoleCapability.VIEW_STAFF_DIRECTORY in extra && school?.hasModule(GsmsModule.HR_STAFF) == true && "Staff & Faculty" !in tabs) tabs.add("Staff & Faculty")
         if (RoleCapability.VIEW_LEAVE_WORKFLOW in extra && school?.hasModule(GsmsModule.LEAVE_MANAGEMENT) == true && "Leave Workflow" !in tabs) tabs.add("Leave Workflow")
+        else if (RoleCapability.APPLY_LEAVE in extra && school?.hasModule(GsmsModule.LEAVE_MANAGEMENT) == true && "My Leave" !in tabs && "Leave Workflow" !in tabs) tabs.add("My Leave")
         return tabs
     }
 
