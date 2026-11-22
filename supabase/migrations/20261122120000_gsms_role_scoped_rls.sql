@@ -44,6 +44,24 @@ where (
 alter table public.gsms_user_access_assignments
   alter column assigned_branch_ids set default array[]::text[];
 
+-- Parents/learners should receive branch scope for every student explicitly linked to them.
+update public.gsms_user_access_assignments a
+set assigned_branch_ids = (
+  select array_agg(distinct s.branch_id order by s.branch_id)
+  from public.gsms_students s
+  where s.school_id = a.school_id
+    and s.id = any(a.linked_student_ids)
+    and s.branch_id is not null
+)
+where upper(a.primary_role) in ('PARENT', 'STUDENT')
+  and cardinality(a.linked_student_ids) > 0
+  and exists (
+    select 1 from public.gsms_students s
+    where s.school_id = a.school_id
+      and s.id = any(a.linked_student_ids)
+      and s.branch_id is not null
+  );
+
 create or replace function public.gsms_link_assignment_auth_user()
 returns trigger
 language plpgsql
