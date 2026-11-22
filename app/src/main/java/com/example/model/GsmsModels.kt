@@ -175,12 +175,12 @@ data class AttendanceRecord(
     val ownerId: String = "",
     val targetType: String = "STUDENT",
     val targetName: String = "",
-    val studentId: String? = null,
     val className: String? = null,
     val dateIso: String = "2026-11-21",
     val status: String = "PRESENT",
     val createdAt: String? = null,
-    val updatedAt: String? = null
+    val updatedAt: String? = null,
+    val studentId: String? = null
 )
 
 @Keep
