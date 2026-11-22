@@ -16,7 +16,7 @@ type Assignment = Record<string, unknown> & {
 type School = Record<string, unknown> & { id?: string; name?: string; school_name?: string; logo_url?: string };
 type ModuleItem = { label: string; icon: typeof LayoutDashboard; group: string; roles: string[] };
 
-const roles = ["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","TEACHER","PARENT","ACCOUNTANT","LIBRARIAN","TRANSPORT_MANAGER","STUDENT"];
+const roles = ["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","DEPUTY_HEADTEACHER","TEACHER","CLASS_TEACHER","PARENT","STUDENT","FINANCE_OFFICER","HR_MANAGER","LIBRARIAN","TRANSPORT_MANAGER","PROCUREMENT_OFFICER","STOREKEEPER","WELFARE_NURSE","ADMISSIONS_RECEPTION","SCHOOL_COUNSELLOR","EXAMINATION_OFFICER","ICT_ADMIN"];
 const modules: ModuleItem[] = [
   {label:"Overview",icon:LayoutDashboard,group:"Workspace",roles},
   {label:"Students",icon:GraduationCap,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","TEACHER","PARENT"]},
@@ -26,13 +26,13 @@ const modules: ModuleItem[] = [
   {label:"Assessments & reports",icon:CheckCircle2,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","TEACHER","PARENT","STUDENT"]},
   {label:"Timetable",icon:CalendarDays,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","TEACHER","PARENT","STUDENT"]},
   {label:"Staff",icon:Users,group:"People",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER"]},
-  {label:"Fees & payments",icon:Wallet,group:"Finance",roles:["SUPER_ADMIN","SCHOOL_ADMIN","ACCOUNTANT","PARENT"]},
-  {label:"Payroll",icon:CreditCard,group:"Finance",roles:["SUPER_ADMIN","SCHOOL_ADMIN","ACCOUNTANT"]},
-  {label:"Library",icon:Library,group:"Operations",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","LIBRARIAN","TEACHER","STUDENT"]},
+  {label:"Fees & payments",icon:Wallet,group:"Finance",roles:["SUPER_ADMIN","SCHOOL_ADMIN","FINANCE_OFFICER","PARENT"]},
+  {label:"Payroll",icon:CreditCard,group:"Finance",roles:["SUPER_ADMIN","SCHOOL_ADMIN","FINANCE_OFFICER"]},
+  {label:"Library",icon:Library,group:"Operations",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","LIBRARIAN","TEACHER","CLASS_TEACHER","STUDENT"]},
   {label:"Transport",icon:Bus,group:"Operations",roles:["SUPER_ADMIN","SCHOOL_ADMIN","TRANSPORT_MANAGER","PARENT"]},
   {label:"Messages",icon:MessageSquare,group:"Communication",roles},
   {label:"School calendar",icon:CalendarDays,group:"Communication",roles},
-  {label:"Reports & analytics",icon:Activity,group:"Insights",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","ACCOUNTANT"]},
+  {label:"Reports & analytics",icon:Activity,group:"Insights",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","DEPUTY_HEADTEACHER","FINANCE_OFFICER"]},
   {label:"User access",icon:ShieldCheck,group:"Administration",roles:["SUPER_ADMIN","SCHOOL_ADMIN"]},
   {label:"Settings",icon:Settings,group:"Administration",roles:["SUPER_ADMIN","SCHOOL_ADMIN"]},
 ];
@@ -83,11 +83,20 @@ export default function App() {
       const metadataRole=String(session.user.app_metadata?.role || session.user.user_metadata?.role || "").toUpperCase();
       const nextRole=list[0]?.primary_role ? String(list[0].primary_role).toUpperCase() : metadataRole;
       setActiveRole(roles.includes(nextRole)?nextRole:(nextRole || ""));
-      const schoolId=list[0]?.school_id;
-      if(schoolId){
-        const result=await supabase.from("gsms_schools").select("*").eq("id",schoolId).maybeSingle();
-        if(!cancelled && !result.error) setSchool((result.data||null) as School|null);
-      } else if(!cancelled) setSchool(null);
+      const schoolResult=await supabase.from("gsms_school_summaries").select("*");
+      if(cancelled)return;
+      if(schoolResult.error){
+        setDataMessage("Your account signed in, but school context could not be loaded. Confirm the GSMS role-scoped migration and access grants.");
+        setSchool(null);
+        return;
+      }
+      const schoolRows=(schoolResult.data||[]) as School[];
+      const assignedSchoolId=list[0]?.school_id;
+      const currentSchool=assignedSchoolId
+        ? schoolRows.find(row=>row.id===assignedSchoolId) || null
+        : schoolRows[0] || null;
+      setSchool(currentSchool);
+      if(!nextRole && currentSchool) setActiveRole("SUPER_ADMIN");
     }
     loadAccess();
     return ()=>{cancelled=true;};
