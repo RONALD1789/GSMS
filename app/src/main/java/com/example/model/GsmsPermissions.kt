@@ -458,7 +458,7 @@ object RolePolicy {
         buildList {
             add(GsmsTab.DASHBOARD)
             if (academicSubTabs(role, school).isNotEmpty() || RoleCapability.VIEW_ACADEMICS in extra) add(GsmsTab.ACADEMICS)
-            if (peopleSubTabs(role, school).isNotEmpty() || RoleCapability.VIEW_ALL_STUDENTS in extra || RoleCapability.VIEW_STAFF_DIRECTORY in extra) add(GsmsTab.PEOPLE)
+            if (peopleSubTabs(role, school).isNotEmpty() || RoleCapability.VIEW_ALL_STUDENTS in extra || RoleCapability.VIEW_ASSIGNED_STUDENTS in extra || RoleCapability.VIEW_STAFF_DIRECTORY in extra) add(GsmsTab.PEOPLE)
             if (operationSections(role, school, extra).isNotEmpty() || RoleCapability.EDIT_OPERATIONS in extra || RoleCapability.VIEW_FINANCE_ALL in extra) add(GsmsTab.OPERATIONS)
             if (analyticsSubTabs(role, school, extra).isNotEmpty()) add(GsmsTab.ANALYTICS)
             add(GsmsTab.AI_GOVERNANCE)
@@ -545,6 +545,13 @@ object RolePolicy {
                 PortalRole.WELFARE_NURSE -> "Welfare"
                 PortalRole.ADMISSIONS_RECEPTION -> "Admissions"
                 PortalRole.HR_MANAGER -> "Payroll"
+                PortalRole.PROCUREMENT_OFFICER -> "Procurement"
+                PortalRole.STOREKEEPER -> "Stores"
+                PortalRole.EXAMINATION_OFFICER -> "Examinations"
+                PortalRole.SCHOOL_COUNSELLOR -> "Pastoral Care"
+                PortalRole.ICT_ADMIN -> "ICT Systems"
+                PortalRole.DEPUTY_HEADTEACHER -> "School Operations"
+                PortalRole.CLASS_TEACHER -> "Classroom"
                 else -> tab.label
             }
             GsmsTab.ANALYTICS -> when (role) {
@@ -564,6 +571,13 @@ object RolePolicy {
             PortalRole.SUPER_ADMIN -> "Global tenant provisioning, module governance, cross-school KPIs & audit trails (operational edits delegated to School Admin)."
             PortalRole.SCHOOL_ADMIN -> "Full single-school administration, module toggles, period settings, staff/student directories, finance & approvals."
             PortalRole.HEADTEACHER -> "Academic leadership, report card approvals & publishing, leave sign-off, early-warning interventions & audit logs."
+            PortalRole.DEPUTY_HEADTEACHER -> "Curriculum and timetable coordination, exam moderation, attendance oversight, delegated report review and school operations."
+            PortalRole.CLASS_TEACHER -> "Assigned-class roster, daily attendance, class progress, report drafting, parent communication and learner follow-up."
+            PortalRole.PROCUREMENT_OFFICER -> "Purchase requisitions, vendor records, quotation review, purchase orders, approval tracking and supplier follow-up."
+            PortalRole.STOREKEEPER -> "Stock register, goods received, stock issues, asset custody, low-stock alerts and reorder tracking."
+            PortalRole.EXAMINATION_OFFICER -> "Exam calendar, invigilation schedules, mark moderation, grading oversight and report-template administration."
+            PortalRole.SCHOOL_COUNSELLOR -> "Pastoral cases, learner wellbeing, safeguarding referrals, intervention notes and follow-up records."
+            PortalRole.ICT_ADMIN -> "ICT support tickets, campus devices, system incidents, access provisioning and security audit oversight."
             PortalRole.TEACHER -> "Timetables, exams/marks, attendance roll call, online report drafting/submission & personal leave applications."
             PortalRole.STUDENT -> "Read-only personal academic schedule, attendance summary, published report cards & school notices."
             PortalRole.PARENT -> "Read-only child progress, attendance, published PDF report cards, fee invoices & parent notices."
