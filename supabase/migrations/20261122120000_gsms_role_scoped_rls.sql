@@ -439,17 +439,47 @@ where public.gsms_parent_can_access_student(s.school_id, s.id)
 revoke all on public.gsms_parent_student_summaries from public, anon;
 grant select on public.gsms_parent_student_summaries to authenticated;
 
+-- Shared school metadata view. Non-owners do not receive subscription, revenue,
+-- churn-risk or owner identity fields. The owner retains the complete base-table view.
+create or replace view public.gsms_school_summaries
+with (security_barrier = true)
+as
+select
+  s.id,
+  case when public.gsms_is_school_owner(s.id) then s.owner_id else ''::text end as owner_id,
+  case when public.gsms_is_school_owner(s.id) then s.supabase_owner_uid else null::uuid end as supabase_owner_uid,
+  s.name,
+  s.code,
+  s.country,
+  s.city,
+  case when public.gsms_is_school_owner(s.id) then s.plan else 'SCHOOL'::text end as plan,
+  case when public.gsms_is_school_owner(s.id) then s.subscription_status else 'ACTIVE'::text end as subscription_status,
+  s.brand_color_hex,
+  s.active_academic_year,
+  s.active_term,
+  s.enabled_modules,
+  s.student_count,
+  s.staff_count,
+  case when public.gsms_is_school_owner(s.id) then s.monthly_revenue_usd else 0::double precision end as monthly_revenue_usd,
+  case when public.gsms_is_school_owner(s.id) then s.churn_risk_score else 0::bigint end as churn_risk_score
+from public.gsms_schools s
+where public.gsms_is_school_member(s.id);
+
+revoke all on public.gsms_school_summaries from public, anon;
+grant select on public.gsms_school_summaries to authenticated;
+
 -- SCHOOL TENANTS: members may read their school; only its verified owner may create,
 -- update or delete the tenant record.
 drop policy if exists "gsms_schools_authenticated_rw" on public.gsms_schools;
 drop policy if exists "gsms_schools_member_select" on public.gsms_schools;
+drop policy if exists "gsms_schools_owner_select" on public.gsms_schools;
 drop policy if exists "gsms_schools_owner_insert" on public.gsms_schools;
 drop policy if exists "gsms_schools_owner_update" on public.gsms_schools;
 drop policy if exists "gsms_schools_owner_delete" on public.gsms_schools;
 
-create policy "gsms_schools_member_select" on public.gsms_schools
+create policy "gsms_schools_owner_select" on public.gsms_schools
 for select to authenticated
-using (public.gsms_is_school_member(id));
+using (public.gsms_is_school_owner(id));
 
 create policy "gsms_schools_owner_insert" on public.gsms_schools
 for insert to authenticated
