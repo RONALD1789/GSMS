@@ -1,6 +1,7 @@
 package com.example.data.supabase
 
 import android.util.Log
+import android.content.Context
 import com.example.model.*
 import com.example.ui.GsmsWorkspaceState
 import com.squareup.moshi.Moshi
@@ -42,8 +43,10 @@ data class SupabaseSyncState(
 )
 
 class SupabaseSyncRepository(
-    private val config: SupabaseConfig = SupabaseConfig.fromBuildConfig()
+    private val config: SupabaseConfig = SupabaseConfig.fromBuildConfig(),
+    appContext: Context? = null
 ) {
+    private val sessionStore = appContext?.let(::SupabaseSessionStore)
     // Strictly in-memory session state; never persisted to plaintext SharedPreferences or disk.
     @Volatile
     private var accessToken: String? = null
@@ -249,11 +252,48 @@ class SupabaseSyncRepository(
         }
     }
 
+    suspend fun restoreSession(): Result<Boolean> {
+        if (_sessionFlow.value != null) return Result.success(true)
+        val stored = sessionStore?.load() ?: return Result.success(false)
+        val api = apiService ?: return Result.failure(
+            IllegalStateException(config.validationError ?: "Supabase Secrets are not configured.")
+        )
+        _state.update { it.copy(isBusy = true, lastError = null) }
+        return try {
+            val response = withContext(Dispatchers.IO) {
+                api.refreshSession(body = SupabaseRefreshRequest(stored.refreshToken))
+            }
+            if (!response.isSuccessful) {
+                sessionStore?.clear()
+                accessToken = null
+                supabaseUserId = null
+                _sessionFlow.value = null
+                _state.update { it.copy(isBusy = false, isAuthenticated = false, authEmail = null) }
+                Result.failure(IllegalStateException(formatHttpError("Restore session", response.code(), response.errorBody())))
+            } else {
+                val body = response.body()
+                if (body?.accessToken.isNullOrBlank()) {
+                    sessionStore?.clear()
+                    _state.update { it.copy(isBusy = false, isAuthenticated = false) }
+                    Result.success(false)
+                } else {
+                    handleAuthResponse("Restore session", stored.email, stored.displayName, response)
+                    Result.success(true)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Supabase session restoration failed: ${e.javaClass.simpleName}")
+            _state.update { it.copy(isBusy = false, lastError = "Could not restore your Supabase session. Please sign in again.") }
+            Result.failure(e)
+        }
+    }
+
     suspend fun signOut(): Result<Unit> {
         val api = apiService
         val hadToken = !accessToken.isNullOrBlank()
         accessToken = null
         supabaseUserId = null
+        sessionStore?.clear()
         _sessionFlow.value = null
         _state.update {
             it.copy(
@@ -674,6 +714,11 @@ class SupabaseSyncRepository(
 
         accessToken = token
         supabaseUserId = uid
+        body.refreshToken?.takeIf { it.isNotBlank() }?.let { refresh ->
+            runCatching {
+                sessionStore?.save(StoredSupabaseSession(refresh, verifiedEmail, resolvedName))
+            }.onFailure { Log.w(TAG, "Could not persist encrypted Supabase session: ${it.javaClass.simpleName}") }
+        }
         _sessionFlow.value = SupabaseSession(
             userId = uid,
             email = verifiedEmail,
@@ -758,7 +803,15 @@ class SupabaseSyncRepository(
         private const val TAG = "SupabaseSyncRepository"
         private val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
 
-        val shared: SupabaseSyncRepository by lazy { SupabaseSyncRepository() }
+        @Volatile private var applicationContext: Context? = null
+
+        fun initialize(context: Context) {
+            applicationContext = context.applicationContext
+        }
+
+        val shared: SupabaseSyncRepository by lazy {
+            SupabaseSyncRepository(appContext = applicationContext)
+        }
 
         fun isValidEmailFormat(email: String): Boolean {
             val trimmed = email.trim()
