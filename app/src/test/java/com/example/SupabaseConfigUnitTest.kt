@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.data.supabase.SupabaseConfig
+import com.example.data.supabase.SbParentStudentRow
 import com.example.data.supabase.SupabaseSyncRepository
 import com.example.data.supabase.toDomain
 import com.example.data.supabase.toSupabaseRow
@@ -159,6 +160,28 @@ class SupabaseConfigUnitTest {
         val roundTripGrant = sbGrant.toDomain()
         assertEquals(PortalRole.TEACHER, roundTripGrant.resolvedRole())
         assertEquals(setOf(RoleCapability.APPROVE_LEAVE), roundTripGrant.resolvedExtraCapabilities())
+    }
+
+    @Test
+    fun parentStudentMapper_doesNotExposeInternalRiskWelfareOrContactFields() {
+        val parentViewStudent = SbParentStudentRow(
+            id = "student_1",
+            schoolId = "school_1",
+            branchId = "branch_1",
+            ownerId = "",
+            admissionNo = "ADM-01",
+            fullName = "Learner One",
+            className = "P5",
+            stream = null,
+            parentName = "Guardian",
+            attendanceRate = 95.0,
+            averageScore = 82.0,
+            feeBalanceUsd = 120.0
+        ).toDomain()
+
+        assertNull(parentViewStudent.parentContact)
+        assertEquals("LOW", parentViewStudent.riskLevel)
+        assertEquals("Not disclosed", parentViewStudent.welfareStatus)
     }
 
     @Test
