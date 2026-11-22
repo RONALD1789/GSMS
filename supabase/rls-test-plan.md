@@ -32,6 +32,14 @@ Also create a second branch A2, a second class P6, and a second student S2.
 | School B owner/member | No access to School A rows |
 | Unassigned authenticated user | No access to either school |
 
+## Identity and branch-link tests
+
+- Existing access assignments are backfilled to `auth_user_id` using their matching Supabase Auth account.
+- A newly created Auth account is linked to a pre-provisioned assignment by email; subsequent authorization uses the immutable Auth UUID.
+- Changing an Auth account's email does not silently transfer its access assignment to a different account.
+- Legacy `branch_main` placeholders are mapped to the actual main-campus branch ID where one exists.
+- New assignments default to the actual main-campus ID, not a placeholder branch ID.
+
 ## Required negative tests
 
 1. Teacher assigned to P5/A1 cannot select or mutate P6/A2 records.
