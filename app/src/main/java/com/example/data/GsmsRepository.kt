@@ -20,6 +20,7 @@ class GsmsRepository(private val db: FirebaseFirestore) {
 
     private val auth = Firebase.auth
     private val streams = SchoolStreamsRepository(db)
+    private val auditLogs = AuditLogRepository(db)
 
     private fun requireUserId(): String {
         return auth.currentUser?.uid
@@ -1036,20 +1037,5 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         moduleName: String,
         summary: String,
         aiAction: Boolean
-    ) {
-        db.collection("schools").document(schoolId).collection("audit_logs").document().set(
-            mapOf(
-                "schoolId" to schoolId,
-                "ownerId" to uid,
-                "actorName" to actorName.ifBlank { "GSMS User" }.take(100),
-                "actorRole" to actorRole.take(60),
-                "actionType" to actionType.take(60),
-                "moduleName" to moduleName.take(60),
-                "summary" to summary.take(400),
-                "aiAction" to aiAction,
-                "createdAt" to FieldValue.serverTimestamp()
-            )
-        ).await()
-    }
-
+    ) = auditLogs.append(schoolId, uid, actorName, actorRole, actionType, moduleName, summary, aiAction)
 }
