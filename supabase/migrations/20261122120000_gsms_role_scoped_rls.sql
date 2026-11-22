@@ -284,17 +284,31 @@ as $$
       target_school_id,
       array['HEADTEACHER', 'DEPUTY_HEADTEACHER']
     )
-    or public.gsms_can_access_class(target_school_id, target_class_name)
-    or exists (
-      select 1
-      from public.gsms_user_access_assignments a
-      where a.school_id = target_school_id
-        and a.active = true
-        and a.auth_user_id = (select auth.uid())
-        and upper(a.primary_role) in ('PARENT', 'STUDENT')
-        and target_student_id = any(a.linked_student_ids)
-    );
+    or public.gsms_can_access_class(target_school_id, target_class_name);
 $$;
+
+create or replace function public.gsms_parent_can_access_student(
+  target_school_id text,
+  target_student_id text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.gsms_user_access_assignments a
+    where a.school_id = target_school_id
+      and a.active = true
+      and a.auth_user_id = (select auth.uid())
+      and upper(a.primary_role) in ('PARENT', 'STUDENT')
+      and target_student_id = any(a.linked_student_ids)
+  );
+$$;
+
+
 
 create or replace function public.gsms_can_access_student_in_branch(
   target_school_id text,
@@ -365,6 +379,7 @@ revoke all on function public.gsms_can_access_branch(text, text) from public, an
 revoke all on function public.gsms_can_access_class_in_branch(text, text, text) from public, anon;
 revoke all on function public.gsms_can_access_student_in_branch(text, text, text, text) from public, anon;
 revoke all on function public.gsms_can_access_student(text, text, text) from public, anon;
+revoke all on function public.gsms_parent_can_access_student(text, text) from public, anon;
 revoke all on function public.gsms_can_read_report(text, text, text, text) from public, anon;
 revoke all on function public.gsms_can_manage_assignments(text) from public, anon;
 
@@ -377,8 +392,35 @@ grant execute on function public.gsms_can_access_branch(text, text) to authentic
 grant execute on function public.gsms_can_access_class_in_branch(text, text, text) to authenticated;
 grant execute on function public.gsms_can_access_student_in_branch(text, text, text, text) to authenticated;
 grant execute on function public.gsms_can_access_student(text, text, text) to authenticated;
+grant execute on function public.gsms_parent_can_access_student(text, text) to authenticated;
 grant execute on function public.gsms_can_read_report(text, text, text, text) to authenticated;
 grant execute on function public.gsms_can_manage_assignments(text) to authenticated;
+
+-- Parent/learner summary view deliberately excludes internal risk, welfare and contact fields.
+-- Views run with the view owner's privileges; the explicit predicate limits each row to
+-- the authenticated user's linked student IDs and assigned branch.
+create or replace view public.gsms_parent_student_summaries
+with (security_barrier = true)
+as
+select
+  s.id,
+  s.school_id,
+  s.branch_id,
+  ''::text as owner_id,
+  s.admission_no,
+  s.full_name,
+  s.class_name,
+  s.stream,
+  s.parent_name,
+  s.attendance_rate,
+  s.average_score,
+  s.fee_balance_usd
+from public.gsms_students s
+where public.gsms_parent_can_access_student(s.school_id, s.id)
+  and public.gsms_can_access_branch(s.school_id, s.branch_id);
+
+revoke all on public.gsms_parent_student_summaries from public, anon;
+grant select on public.gsms_parent_student_summaries to authenticated;
 
 -- SCHOOL TENANTS: members may read their school; only its verified owner may create,
 -- update or delete the tenant record.
