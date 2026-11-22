@@ -39,16 +39,16 @@ Also create a second branch A2, a second class P6, and a second student S2.
 3. Teacher cannot update an APPROVED/PUBLISHED report or set a report status to APPROVED/PUBLISHED.
 4. Parent cannot select another student's records or any report that is not APPROVED/PUBLISHED.
 5. Parent cannot access attendance yet: the current attendance table stores a display name but has no student ID foreign key. Do not match by name.
-6. Finance Officer cannot read student medical/welfare alerts or HR records.
-7. School Admin cannot create a SUPER_ADMIN assignment or alter their own role by changing their assignment.
-8. A member of School A cannot read or mutate any School B data.
-9. A disabled assignment (`active = false`) must immediately lose access after the next authenticated request.
-10. An unauthenticated/anonymous request must not read or mutate any tenant data.
+7. Finance Officer cannot read student medical/welfare alerts or HR records.
+8. School Admin cannot create a SUPER_ADMIN assignment or alter their own role by changing their assignment.
+9. A member of School A cannot read or mutate any School B data.
+10. A disabled assignment (`active = false`) must immediately lose access after the next authenticated request.
+11. An unauthenticated/anonymous request must not read or mutate any tenant data.
 
 ## Schema limitations to address separately
 
 - Attendance needs a `student_id` foreign key before parents/learners can safely see individual attendance.
-- Finance rows need a stable student/guardian relationship before parents can see their own invoices or balances.
+- Finance rows need a stable student/guardian relationship before parents can see their own invoices or balances. The student summary view currently exposes the cached `fee_balance_usd` only.
 - Leave requests need an `auth_user_id`/staff-account relationship before staff can see their own leave requests.
 - The current report-card status model should be validated against the app's exact workflow before production approval. Teachers are restricted to DRAFT/RETURNED rows and may submit; only leadership can approve/publish.
 - Operational `module_type` values must be checked against actual values emitted by the app. A mismatch can deny an otherwise valid operational role.
