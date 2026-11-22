@@ -48,8 +48,8 @@ class RolePolicyUnitTest {
         assertFalse(role.has(RoleCapability.VIEW_AUDIT_LOGS))
         assertFalse(GsmsTab.OPERATIONS in RolePolicy.visibleTabs(role, fullSchool))
 
-        assertTrue(GsmsTab.OPERATIONS in RolePolicy.visibleTabs(PortalRole.CLASS_TEACHER, fullSchool))
-        assertEquals(listOf("Welfare", "Discipline"), RolePolicy.operationSections(PortalRole.CLASS_TEACHER, fullSchool))
+        assertFalse(GsmsTab.OPERATIONS in RolePolicy.visibleTabs(PortalRole.CLASS_TEACHER, fullSchool))
+        assertEquals(emptyList<String>(), RolePolicy.operationSections(PortalRole.CLASS_TEACHER, fullSchool))
 
         val students = listOf(
             Student(id = "stu_1", fullName = "Maya Lin", className = "Grade 10A"),
