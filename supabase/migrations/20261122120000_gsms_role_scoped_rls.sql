@@ -115,7 +115,7 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $
+as $$
   select
     public.gsms_is_school_manager(target_school_id)
     or public.gsms_has_any_role(
@@ -131,7 +131,7 @@ as $
         and target_branch_id is not null
         and target_branch_id = any(a.assigned_branch_ids)
     );
-$;
+$$;
 
 create or replace function public.gsms_can_access_class_in_branch(
   target_school_id text,
@@ -143,10 +143,10 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $
+as $$
   select public.gsms_can_access_branch(target_school_id, target_branch_id)
      and public.gsms_can_access_class(target_school_id, target_class_name);
-$;
+$$;
 
 create or replace function public.gsms_can_access_student_in_branch(
   target_school_id text,
@@ -159,10 +159,10 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $
+as $$
   select public.gsms_can_access_branch(target_school_id, target_branch_id)
      and public.gsms_can_access_student(target_school_id, target_student_id, target_class_name);
-$;
+$$;
 
 create or replace function public.gsms_can_access_student(
   target_school_id text,
