@@ -34,6 +34,8 @@ Also create a second branch A2, a second class P6, and a second student S2.
 
 ## Identity and branch-link tests
 
+- A new/unassigned authenticated account cannot create a school unless its trusted `app_metadata.gsms_platform_admin` claim is true.
+- The designated platform provisioning account can create the first tenant; an existing verified school owner can create additional tenants.
 - Existing access assignments are backfilled to `auth_user_id` using their matching Supabase Auth account.
 - A newly created Auth account is linked to a pre-provisioned assignment by email; subsequent authorization uses the immutable Auth UUID.
 - Changing an Auth account's email does not silently transfer its access assignment to a different account.
