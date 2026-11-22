@@ -17,13 +17,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.AiRepository
-import com.example.data.GsmsRepository
 import com.example.data.supabase.SupabaseSyncRepository
 import com.example.model.GsmsTab
 import com.example.model.PortalRole
@@ -32,66 +30,26 @@ import com.example.ui.theme.CobaltBlue
 import com.example.ui.theme.EmeraldTeal
 import com.example.ui.theme.GsmsTheme
 import com.example.ui.theme.WarmAmber
-import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.auth.auth
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
-
-internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
-    val listener = FirebaseAuth.AuthStateListener { auth ->
-        trySend(auth.currentUser)
-    }
-    addAuthStateListener(listener)
-    awaitClose { removeAuthStateListener(listener) }
-}
 
 @Composable
 fun GsmsAppNavigation(
-    auth: FirebaseAuth = Firebase.auth,
     supabaseRepository: SupabaseSyncRepository = SupabaseSyncRepository.shared
 ) {
-    val currentUser by auth.authStateFlow()
-        .collectAsStateWithLifecycle(initialValue = auth.currentUser)
     val supabaseSession by supabaseRepository.sessionFlow.collectAsStateWithLifecycle()
-    val firebaseUser = currentUser
-    val emailSession = supabaseSession
-
-    when {
-        firebaseUser != null -> {
-            key("fb_${firebaseUser.uid}") {
-                GsmsTheme {
-                    GsmsAuthenticatedShell(
-                        authBackend = AuthBackend.FIREBASE,
-                        currentUserId = firebaseUser.uid,
-                        userDisplayName = firebaseUser.displayName ?: firebaseUser.email ?: "GSMS User",
-                        userEmail = firebaseUser.email,
-                        supabaseRepository = supabaseRepository
-                    )
-                }
-            }
+    val session = supabaseSession
+    if (session == null) {
+        GsmsTheme {
+            AuthScreen(supabaseRepository = supabaseRepository, onAuthSuccess = {})
         }
-        emailSession != null -> {
-            key("sb_${emailSession.userId}") {
-                GsmsTheme {
-                    GsmsAuthenticatedShell(
-                        authBackend = AuthBackend.SUPABASE,
-                        currentUserId = emailSession.userId,
-                        userDisplayName = emailSession.displayName,
-                        userEmail = emailSession.email,
-                        supabaseRepository = supabaseRepository
-                    )
-                }
-            }
-        }
-        else -> {
+    } else {
+        key("sb_${session.userId}") {
             GsmsTheme {
-                AuthScreen(
-                    supabaseRepository = supabaseRepository,
-                    onAuthSuccess = {}
+                GsmsAuthenticatedShell(
+                    currentUserId = session.userId,
+                    userDisplayName = session.displayName,
+                    userEmail = session.email,
+                    supabaseRepository = supabaseRepository
                 )
             }
         }
@@ -101,7 +59,6 @@ fun GsmsAppNavigation(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GsmsAuthenticatedShell(
-    authBackend: AuthBackend,
     currentUserId: String,
     userDisplayName: String,
     userEmail: String?,
@@ -112,22 +69,15 @@ private fun GsmsAuthenticatedShell(
     val credentialManager = remember(context) { CredentialManager.create(context) }
 
     val viewModel: GsmsViewModel = viewModel(
-        key = "${authBackend.name}_$currentUserId",
+        key = "supabase_$currentUserId",
         factory = viewModelFactory {
             initializer {
-                val app = checkNotNull(this[APPLICATION_KEY]) {
-                    "APPLICATION_KEY missing from CreationExtras"
-                }
-                val repo = GsmsRepository(app.applicationContext)
-                val aiRepo = AiRepository()
                 GsmsViewModel(
-                    repository = repo,
-                    aiRepository = aiRepo,
+                    aiRepository = AiRepository(),
                     currentUserId = currentUserId,
                     userDisplayName = userDisplayName,
                     userEmail = userEmail,
-                    supabaseRepository = supabaseRepository,
-                    authBackend = authBackend
+                    supabaseRepository = supabaseRepository
                 )
             }
         }
