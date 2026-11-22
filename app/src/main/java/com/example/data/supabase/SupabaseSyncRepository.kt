@@ -374,7 +374,6 @@ class SupabaseSyncRepository(
                 coroutineScope {
                     val branchesD = async { readList("gsms_branches", api.fetchBranches(schoolIdFilter = filter)) { it.toDomain() } }
                     val accessD = async { readList("gsms_user_access_assignments", api.fetchAccessAssignments(schoolIdFilter = filter)) { it.toDomain() } }
-                    val studentsD = async { readList("gsms_students", api.fetchStudents(schoolIdFilter = filter)) { it.toDomain() } }
                     val staffD = async { readList("gsms_staff", api.fetchStaff(schoolIdFilter = filter)) { it.toDomain() } }
                     val academicsD = async { readList("gsms_academic_records", api.fetchAcademicRecords(schoolIdFilter = filter)) { it.toDomain() } }
                     val attendanceD = async { readList("gsms_attendance", api.fetchAttendance(schoolIdFilter = filter)) { it.toDomain() } }
@@ -393,6 +392,19 @@ class SupabaseSyncRepository(
                         it.active && it.email.equals(session.email, ignoreCase = true)
                     }
                     val isOwner = activeSchool.ownerId == session.userId
+                    val students = if (
+                        !isOwner && matchingAssignment?.resolvedRole() in setOf(PortalRole.PARENT, PortalRole.STUDENT)
+                    ) {
+                        readList(
+                            "gsms_parent_student_summaries",
+                            api.fetchParentStudentSummaries(schoolIdFilter = filter)
+                        ) { it.toDomain() }
+                    } else {
+                        readList(
+                            "gsms_students",
+                            api.fetchStudents(schoolIdFilter = filter)
+                        ) { it.toDomain() }
+                    }
                     if (!isOwner && matchingAssignment == null) {
                         throw SecurityException(
                             "Access denied: this account has no active access assignment for ${activeSchool.name}."
@@ -447,7 +459,7 @@ class SupabaseSyncRepository(
                         assignedClasses = assignedClasses,
                         assignedSubjects = assignedSubjects,
                         linkedStudentIds = linkedStudentIds,
-                        students = studentsD.await(),
+                        students = students,
                         staff = staffD.await(),
                         academics = academicsD.await(),
                         attendance = attendanceD.await(),
