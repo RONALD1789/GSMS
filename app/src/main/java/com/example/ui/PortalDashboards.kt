@@ -33,13 +33,16 @@ fun PortalDashboardScreen(
     val school = workspace.activeSchool
     val lowData = workspace.userProfile?.lowDataMode == true
     val aiEnabled = school?.hasModule(GsmsModule.AI_TOOLS) != false
-    val visibleTabs = RolePolicy.visibleTabs(role, school)
+    val visibleTabs = RolePolicy.visibleTabs(role, school, workspace.activeExtraCapabilities)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        item {
+            PortalWelcomeCard(role = role, school = school, lowDataMode = lowData)
+        }
         item {
             AiCopilotBannerCard(
                 role = role,
@@ -503,6 +506,132 @@ fun PortalDashboardScreen(
                                 StatusPill(op.status, CobaltBlue)
                             }
                         }
+                    }
+                }
+            }
+
+            else -> {
+                item {
+                    RoleDashboardOverview(
+                        workspace = workspace,
+                        isWideScreen = isWideScreen,
+                        onNavigateToTab = onNavigateToTab
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun PortalWelcomeCard(role: PortalRole, school: School?, lowDataMode: Boolean) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = OxfordNavy,
+        shape = RoundedCornerShape(22.dp),
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Surface(color = PureWhite.copy(alpha = 0.12f), shape = RoundedCornerShape(16.dp)) {
+                Icon(Icons.Rounded.School, contentDescription = null, tint = PureWhite,
+                    modifier = Modifier.padding(13.dp).size(28.dp))
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Welcome to your workspace", style = MaterialTheme.typography.labelLarge, color = PureWhite.copy(alpha = 0.78f))
+                Text(role.displayName, style = MaterialTheme.typography.titleLarge, color = PureWhite)
+                Text(
+                    buildString {
+                        append(school?.name ?: "GSMS Platform")
+                        if (school != null) append("  •  ${school.activeAcademicYear} / ${school.activeTerm}")
+                    },
+                    style = MaterialTheme.typography.bodySmall, color = PureWhite.copy(alpha = 0.82f)
+                )
+                if (lowDataMode) Text("Low-data mode is active", style = MaterialTheme.typography.labelSmall, color = EmeraldBright)
+            }
+            Icon(Icons.Rounded.VerifiedUser, contentDescription = "Role-secured workspace", tint = EmeraldBright, modifier = Modifier.size(25.dp))
+        }
+    }
+}
+
+@Composable
+private fun RoleDashboardOverview(
+    workspace: GsmsWorkspaceState,
+    isWideScreen: Boolean,
+    onNavigateToTab: (GsmsTab) -> Unit
+) {
+    val role = workspace.activeRole
+    val scopedStudents = RolePolicy.filterStudentsForRole(role, workspace.students, workspace.assignedClasses, workspace.linkedStudentIds)
+    val ops = workspace.operations
+    val cards = when (role) {
+        PortalRole.DEPUTY_HEADTEACHER -> listOf(
+            KpiData("Learners", "${workspace.students.size}", "School-wide oversight", Icons.Rounded.Groups, CobaltBlue),
+            KpiData("Reports to Review", "${workspace.reportCards.count { it.status == ReportStatus.SUBMITTED.name }}", "Awaiting review", Icons.Rounded.FactCheck, WarmAmber),
+            KpiData("Attendance", "${if (workspace.attendance.isEmpty()) 0 else workspace.attendance.count { it.status == "PRESENT" } * 100 / workspace.attendance.size}%", "Current records", Icons.Rounded.EventAvailable, EmeraldTeal),
+            KpiData("Open Alerts", "${workspace.alerts.count { it.status != "RESOLVED" }}", "Interventions", Icons.Rounded.WarningAmber, CrimsonRed)
+        )
+        PortalRole.CLASS_TEACHER -> listOf(
+            KpiData("My Learners", "${scopedStudents.size}", "Assigned classes", Icons.Rounded.Groups, CobaltBlue),
+            KpiData("Attendance", "${if (scopedStudents.isEmpty()) 0 else scopedStudents.map { it.attendanceRate }.average().toInt()}%", "Class average", Icons.Rounded.EventAvailable, EmeraldTeal),
+            KpiData("Reports Due", "${workspace.reportCards.count { it.status == ReportStatus.DRAFT.name || it.status == ReportStatus.RETURNED.name }}", "Draft / returned", Icons.Rounded.Description, WarmAmber),
+            KpiData("Learner Alerts", "${workspace.alerts.count { it.status != "RESOLVED" }}", "Follow-up", Icons.Rounded.NotificationsActive, CrimsonRed)
+        )
+        PortalRole.PROCUREMENT_OFFICER -> listOf(
+            KpiData("Requisitions", "${ops.count { it.moduleType in setOf("REQUISITION", "PROCUREMENT") }}", "Submitted requests", Icons.Rounded.RequestQuote, CobaltBlue),
+            KpiData("Purchase Orders", "${ops.count { it.moduleType == "PURCHASE_ORDER" }}", "Order register", Icons.Rounded.ShoppingCart, EmeraldTeal),
+            KpiData("Vendors", "${ops.count { it.moduleType == "VENDOR" }}", "Supplier records", Icons.Rounded.Business, VioletAi),
+            KpiData("Pending", "${ops.count { it.status !in setOf("APPROVED", "COMPLETED", "CLOSED") && it.moduleType in setOf("REQUISITION", "PROCUREMENT", "PURCHASE_ORDER", "RFQ") }}", "Needs action", Icons.Rounded.PendingActions, WarmAmber)
+        )
+        PortalRole.STOREKEEPER -> listOf(
+            KpiData("Stock Items", "${ops.count { it.moduleType in setOf("STOCK", "INVENTORY", "ASSET") }}", "Inventory register", Icons.Rounded.Inventory2, CobaltBlue),
+            KpiData("Low Stock", "${ops.count { it.status.contains("LOW", true) || it.metricLabel.orEmpty().contains("LOW", true) }}", "Reorder watch", Icons.Rounded.WarningAmber, CrimsonRed),
+            KpiData("Issuances", "${ops.count { it.moduleType == "STOCK_ISSUE" }}", "Stock movement", Icons.Rounded.Outbox, EmeraldTeal),
+            KpiData("Receipts", "${ops.count { it.moduleType == "STOCK_RECEIPT" }}", "Goods received", Icons.Rounded.Inventory, VioletAi)
+        )
+        PortalRole.EXAMINATION_OFFICER -> listOf(
+            KpiData("Exam Records", "${ops.count { it.moduleType in setOf("EXAM", "EXAM_TIMETABLE") }}", "Schedules & sittings", Icons.Rounded.EditCalendar, CobaltBlue),
+            KpiData("Mark Moderation", "${ops.count { it.moduleType == "MARK_MODERATION" }}", "Moderation queue", Icons.Rounded.FactCheck, WarmAmber),
+            KpiData("Report Submissions", "${workspace.reportCards.count { it.status == ReportStatus.SUBMITTED.name }}", "Awaiting action", Icons.Rounded.Description, EmeraldTeal),
+            KpiData("Academic Alerts", "${workspace.alerts.count { it.category in setOf("ACADEMIC", "EXAM") && it.status != "RESOLVED" }}", "Open issues", Icons.Rounded.WarningAmber, CrimsonRed)
+        )
+        PortalRole.SCHOOL_COUNSELLOR -> listOf(
+            KpiData("Learners", "${scopedStudents.size}", "Assigned school scope", Icons.Rounded.Groups, CobaltBlue),
+            KpiData("High-Risk", "${scopedStudents.count { it.riskLevel in setOf(RiskLevel.HIGH.name, RiskLevel.CRITICAL.name) }}", "Priority follow-up", Icons.Rounded.WarningAmber, CrimsonRed),
+            KpiData("Open Cases", "${ops.count { it.moduleType in setOf("COUNSELLING", "DISCIPLINE", "INTERVENTION", "SAFEGUARDING") && it.status != "CLOSED" }}", "Pastoral support", Icons.Rounded.Favorite, VioletAi),
+            KpiData("Attendance Flags", "${workspace.alerts.count { it.category == "ATTENDANCE" && it.status != "RESOLVED" }}", "Check-ins", Icons.Rounded.EventBusy, WarmAmber)
+        )
+        PortalRole.ICT_ADMIN -> listOf(
+            KpiData("ICT Tickets", "${ops.count { it.moduleType in setOf("ICT_TICKET", "SYSTEM_INCIDENT") }}", "Support queue", Icons.Rounded.SupportAgent, CobaltBlue),
+            KpiData("Access Requests", "${ops.count { it.moduleType == "ACCESS_REQUEST" }}", "Review queue", Icons.Rounded.AdminPanelSettings, WarmAmber),
+            KpiData("ICT Assets", "${ops.count { it.moduleType == "ICT_ASSET" }}", "Device register", Icons.Rounded.Devices, EmeraldTeal),
+            KpiData("Audit Events", "${workspace.auditLogs.size}", "Recent activity", Icons.Rounded.Security, VioletAi)
+        )
+        else -> listOf(
+            KpiData("Learners", "${scopedStudents.size}", "Visible in your role", Icons.Rounded.Groups, CobaltBlue),
+            KpiData("Open Tasks", "${workspace.alerts.count { it.status != "RESOLVED" }}", "Assigned follow-up", Icons.Rounded.TaskAlt, WarmAmber)
+        )
+    }
+    val actions = buildList<Pair<String, () -> Unit>> {
+        if (RolePolicy.academicSubTabs(role, workspace.activeSchool, workspace.activeExtraCapabilities).isNotEmpty()) add("Academics & Reports" to { onNavigateToTab(GsmsTab.ACADEMICS) })
+        if (RolePolicy.operationSections(role, workspace.activeSchool, workspace.activeExtraCapabilities).isNotEmpty()) add("My Work Queue" to { onNavigateToTab(GsmsTab.OPERATIONS) })
+        if (RolePolicy.peopleSubTabs(role, workspace.activeSchool, workspace.activeExtraCapabilities).isNotEmpty()) add("People & Classes" to { onNavigateToTab(GsmsTab.PEOPLE) })
+        if (RolePolicy.analyticsSubTabs(role, workspace.activeSchool, workspace.activeExtraCapabilities).isNotEmpty()) add("Alerts & Updates" to { onNavigateToTab(GsmsTab.ANALYTICS) })
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SectionHeader(title = "${role.shortTitle} overview", subtitle = role.scopeDescription)
+        KpiGrid(isWideScreen = isWideScreen, cards = cards)
+        QuickActionStrip(actions = actions)
+        if (workspace.activeSchool?.hasModule(GsmsModule.AI_TOOLS) == true) {
+            Surface(color = VioletSoft.copy(alpha = 0.55f), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = VioletAi)
+                    Column {
+                        Text("Role-aware AI assistant", style = MaterialTheme.typography.titleSmall)
+                        Text("Use the AI workspace for ${role.aiCapabilities.joinToString(" • ")}.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

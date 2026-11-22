@@ -148,12 +148,12 @@ object SupabaseSeedData {
         val attendance = listOf(
             AttendanceRecord(
                 id = "att_1_$shortUid", schoolId = mainSchoolId, branchId = "branch_main", ownerId = uid,
-                targetType = "STUDENT", targetName = "Maya Lin", className = "Grade 10A",
+                targetType = "STUDENT", targetName = "Maya Lin", studentId = "stu_1_$shortUid", className = "Grade 10A",
                 dateIso = "2026-11-21", status = "PRESENT"
             ),
             AttendanceRecord(
                 id = "att_2_$shortUid", schoolId = mainSchoolId, branchId = "branch_main", ownerId = uid,
-                targetType = "STUDENT", targetName = "Daniel Okafor", className = "Grade 10A",
+                targetType = "STUDENT", targetName = "Daniel Okafor", studentId = "stu_2_$shortUid", className = "Grade 10A",
                 dateIso = "2026-11-21", status = "ABSENT"
             )
         )
@@ -192,12 +192,14 @@ object SupabaseSeedData {
             FinanceEntry(
                 id = "fin_1_$shortUid", schoolId = mainSchoolId, branchId = "branch_main", ownerId = uid,
                 entryType = "INVOICE", referenceNo = "INV-2026-041", title = "Term 1 Tuition & Lab Fee",
-                partyName = "Wei Lin", category = "Tuition", amountUsd = 2400.0, paidUsd = 2400.0, status = "PAID"
+                partyName = "Wei Lin", category = "Tuition", amountUsd = 2400.0, paidUsd = 2400.0, status = "PAID",
+                studentId = "stu_1_$shortUid"
             ),
             FinanceEntry(
                 id = "fin_2_$shortUid", schoolId = mainSchoolId, branchId = "branch_main", ownerId = uid,
                 entryType = "INVOICE", referenceNo = "INV-2026-078", title = "Term 1 Boarding & Tuition",
-                partyName = "Ngozi Okafor", category = "Tuition", amountUsd = 2400.0, paidUsd = 1760.0, status = "PARTIAL"
+                partyName = "Ngozi Okafor", category = "Tuition", amountUsd = 2400.0, paidUsd = 1760.0, status = "PARTIAL",
+                studentId = "stu_2_$shortUid"
             )
         )
 

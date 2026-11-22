@@ -37,7 +37,7 @@ fun AcademicsAndReportsScreen(
     }
 
     val tabs = remember(role, school.enabledModules) {
-        RolePolicy.academicSubTabs(role, school)
+        RolePolicy.academicSubTabs(role, school, workspace.activeExtraCapabilities)
     }
     var selectedTab by remember(tabs) { mutableIntStateOf(0) }
     var showAddAcademicDialog by remember { mutableStateOf(false) }

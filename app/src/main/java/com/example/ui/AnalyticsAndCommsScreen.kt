@@ -224,6 +224,8 @@ fun AnalyticsAndCommsScreen(
 
     if (showNewMessageDialog) {
         ComposeMessageDialog(
+            role = workspace.activeRole,
+            assignedClasses = workspace.assignedClasses,
             onAiDraft = { channel, audience, topic, onResult ->
                 viewModel.generateQuickAiDraft(
                     workspace,
@@ -233,8 +235,8 @@ fun AnalyticsAndCommsScreen(
                 )
             },
             onDismiss = { showNewMessageDialog = false },
-            onSend = { channel, audience, title, body, aiDrafted ->
-                viewModel.sendCommunication(school, workspace.activeBranchId, channel, audience, title, body, workspace.activeRole, aiDrafted)
+            onSend = { channel, audience, title, body, aiDrafted, targetClass ->
+                viewModel.sendCommunication(school, workspace.activeBranchId, channel, audience, title, body, workspace.activeRole, aiDrafted, targetClass)
                 showNewMessageDialog = false
             }
         )
@@ -243,15 +245,21 @@ fun AnalyticsAndCommsScreen(
 
 @Composable
 private fun ComposeMessageDialog(
+    role: PortalRole,
+    assignedClasses: List<String>,
     onAiDraft: (String, String, String, (String) -> Unit) -> Unit,
     onDismiss: () -> Unit,
-    onSend: (String, String, String, String, Boolean) -> Unit
+    onSend: (String, String, String, String, Boolean, String?) -> Unit
 ) {
     var channel by remember { mutableStateOf("ANNOUNCEMENT") }
     var audience by remember { mutableStateOf("All Parents & Staff") }
     var title by remember { mutableStateOf("") }
     var body by remember { mutableStateOf("") }
     var aiDrafted by remember { mutableStateOf(false) }
+    var targetClass by remember(assignedClasses) { mutableStateOf(assignedClasses.firstOrNull()) }
+    var classMenuExpanded by remember { mutableStateOf(false) }
+    val teacherTargeting = role in setOf(PortalRole.TEACHER, PortalRole.CLASS_TEACHER)
+    val effectiveAudience = if (teacherTargeting) "Parents of Class" else audience
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -263,11 +271,28 @@ private fun ComposeMessageDialog(
                         FilterChip(selected = channel == ch, onClick = { channel = ch }, label = { Text(ch) })
                     }
                 }
-                OutlinedTextField(value = audience, onValueChange = { audience = it }, label = { Text("Audience") }, singleLine = true)
+                if (teacherTargeting) {
+                    Text("Send only to parents of your assigned class.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Box {
+                        OutlinedButton(onClick = { classMenuExpanded = true }, modifier = Modifier.fillMaxWidth(), enabled = assignedClasses.isNotEmpty()) {
+                            Text(targetClass ?: "No assigned classes")
+                        }
+                        DropdownMenu(expanded = classMenuExpanded, onDismissRequest = { classMenuExpanded = false }) {
+                            assignedClasses.forEach { className ->
+                                DropdownMenuItem(
+                                    text = { Text(className) },
+                                    onClick = { targetClass = className; classMenuExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(value = audience, onValueChange = { audience = it }, label = { Text("Audience") }, singleLine = true)
+                }
                 OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Subject / Title") }, singleLine = true)
                 OutlinedTextField(value = body, onValueChange = { body = it }, label = { Text("Message Body") })
                 OutlinedButton(onClick = {
-                    onAiDraft(channel, audience, title.ifBlank { "Upcoming Term 1 Assessments & Fee Schedule" }) { draft ->
+                    onAiDraft(channel, if (teacherTargeting) "$effectiveAudience • $targetClass" else effectiveAudience, title.ifBlank { "Upcoming Term 1 Assessments & Fee Schedule" }) { draft ->
                         body = draft
                         if (title.isBlank()) title = "Important School Update"
                         aiDrafted = true
@@ -280,9 +305,14 @@ private fun ComposeMessageDialog(
             }
         },
         confirmButton = {
-            Button(onClick = {
-                if (title.isNotBlank() && body.isNotBlank()) onSend(channel, audience, title, body, aiDrafted)
-            }) { Text("Send") }
+            Button(
+                enabled = title.isNotBlank() && body.isNotBlank() && (!teacherTargeting || targetClass?.let { it in assignedClasses } == true),
+                onClick = {
+                    if (title.isNotBlank() && body.isNotBlank()) {
+                        onSend(channel, effectiveAudience, title, body, aiDrafted, targetClass.takeIf { teacherTargeting })
+                    }
+                }
+            ) { Text("Send") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )

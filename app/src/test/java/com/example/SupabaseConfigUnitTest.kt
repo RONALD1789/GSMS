@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.data.supabase.SupabaseConfig
+import com.example.data.supabase.SbParentStudentRow
 import com.example.data.supabase.SupabaseSyncRepository
 import com.example.data.supabase.toDomain
 import com.example.data.supabase.toSupabaseRow
@@ -38,6 +39,21 @@ class SupabaseConfigUnitTest {
 
         val shortKey = SupabaseConfig("https://abcdefghijklm.supabase.co", "short")
         assertFalse(shortKey.isConfigured)
+    }
+
+    @Test
+    fun supabasePublishableKey_isAcceptedAndSecretKeyIsRejected() {
+        val publishable = SupabaseConfig(
+            "https://abcdefghijklm.supabase.co",
+            "sb_publishable_123456789012345678901234"
+        )
+        assertTrue(publishable.isConfigured)
+
+        val secret = SupabaseConfig(
+            "https://abcdefghijklm.supabase.co",
+            "sb_secret_123456789012345678901234"
+        )
+        assertFalse(secret.isConfigured)
     }
 
     @Test
@@ -93,7 +109,7 @@ class SupabaseConfigUnitTest {
     fun domainMappers_preserveMultiTenantColumns() {
         val school = School(
             id = "school_1",
-            ownerId = "firebase_uid_1",
+            ownerId = "legacy_owner_uid_1",
             name = "Greenwood Academy",
             code = "GWA-01",
             country = "Kenya",
@@ -144,6 +160,28 @@ class SupabaseConfigUnitTest {
         val roundTripGrant = sbGrant.toDomain()
         assertEquals(PortalRole.TEACHER, roundTripGrant.resolvedRole())
         assertEquals(setOf(RoleCapability.APPROVE_LEAVE), roundTripGrant.resolvedExtraCapabilities())
+    }
+
+    @Test
+    fun parentStudentMapper_doesNotExposeInternalRiskWelfareOrContactFields() {
+        val parentViewStudent = SbParentStudentRow(
+            id = "student_1",
+            schoolId = "school_1",
+            branchId = "branch_1",
+            ownerId = "",
+            admissionNo = "ADM-01",
+            fullName = "Learner One",
+            className = "P5",
+            stream = null,
+            parentName = "Guardian",
+            attendanceRate = 95.0,
+            averageScore = 82.0,
+            feeBalanceUsd = 120.0
+        ).toDomain()
+
+        assertNull(parentViewStudent.parentContact)
+        assertEquals("LOW", parentViewStudent.riskLevel)
+        assertEquals("Not disclosed", parentViewStudent.welfareStatus)
     }
 
     @Test

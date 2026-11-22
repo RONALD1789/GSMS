@@ -46,29 +46,27 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-import com.google.firebase.Firebase
-import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.auth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
 fun attemptAutoSignIn(
     context: Context,
     credentialManager: CredentialManager,
+    supabaseRepository: SupabaseSyncRepository,
     onAuthSuccess: () -> Unit,
     onUnauthenticated: () -> Unit,
     scope: CoroutineScope
 ) {
-    if (Firebase.auth.currentUser != null || SupabaseSyncRepository.shared.sessionFlow.value != null) {
+    if (supabaseRepository.sessionFlow.value != null) {
         onAuthSuccess()
         return
     }
     val clientId = try {
         context.getString(R.string.default_web_client_id)
-    } catch (_: Exception) {
+            .takeIf { it.isNotBlank() && it != "YOUR_GOOGLE_WEB_CLIENT_ID" }
+    } catch (_: Exception) { null } ?: run {
         onUnauthenticated()
         return
     }
@@ -86,8 +84,13 @@ fun attemptAutoSignIn(
             val cred = credentialManager.getCredential(context, request).credential
             if (cred is CustomCredential && cred.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 val token = GoogleIdTokenCredential.createFrom(cred.data).idToken
-                Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
-                onAuthSuccess()
+                val googleCredential = GoogleIdTokenCredential.createFrom(cred.data)
+                val result = supabaseRepository.signInWithGoogleIdToken(
+                    idToken = token,
+                    email = googleCredential.id,
+                    displayName = googleCredential.displayName
+                )
+                if (result.isSuccess) onAuthSuccess() else onUnauthenticated()
             } else {
                 onUnauthenticated()
             }
@@ -100,6 +103,7 @@ fun attemptAutoSignIn(
 fun onGoogleSignInClicked(
     context: Context,
     credentialManager: CredentialManager,
+    supabaseRepository: SupabaseSyncRepository,
     onAuthSuccess: () -> Unit,
     onAuthError: (String) -> Unit,
     scope: CoroutineScope,
@@ -107,8 +111,9 @@ fun onGoogleSignInClicked(
 ) {
     val clientId = try {
         context.getString(R.string.default_web_client_id)
-    } catch (_: Exception) {
-        onAuthError("Google Sign-In configuration missing: default_web_client_id not found")
+            .takeIf { it.isNotBlank() && it != "YOUR_GOOGLE_WEB_CLIENT_ID" }
+    } catch (_: Exception) { null } ?: run {
+        onAuthError("Configure the Google Web OAuth client ID in app/src/main/res/values/strings.xml before using Google Sign-In.")
         return
     }
     val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
@@ -122,9 +127,16 @@ fun onGoogleSignInClicked(
                 ?: throw IllegalStateException("Activity context required for Google Sign-In.")
             val cred = credentialManager.getCredential(activity, request).credential
             if (cred is CustomCredential && cred.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                val token = GoogleIdTokenCredential.createFrom(cred.data).idToken
-                Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
-                onAuthSuccess()
+                val googleCredential = GoogleIdTokenCredential.createFrom(cred.data)
+                val result = supabaseRepository.signInWithGoogleIdToken(
+                    idToken = googleCredential.idToken,
+                    email = googleCredential.id,
+                    displayName = googleCredential.displayName
+                )
+                result.fold(
+                    onSuccess = { onAuthSuccess() },
+                    onFailure = { onAuthError(it.localizedMessage ?: "Supabase Google sign-in failed.") }
+                )
             } else {
                 onAuthError("Unexpected credential type received.")
             }
@@ -150,7 +162,6 @@ fun performSignOut(
             } catch (e: Exception) {
                 Log.w("Auth", "Failed to clear credential state: ${e.message}")
             } finally {
-                Firebase.auth.signOut()
                 onSignOutComplete()
             }
         }
@@ -183,6 +194,7 @@ fun AuthScreen(
         attemptAutoSignIn(
             context = context,
             credentialManager = credentialManager,
+            supabaseRepository = supabaseRepository,
             onAuthSuccess = {
                 autoChecking = false
                 onAuthSuccess()
@@ -548,6 +560,7 @@ fun AuthScreen(
                         onGoogleSignInClicked(
                             context = context,
                             credentialManager = credentialManager,
+                            supabaseRepository = supabaseRepository,
                             onAuthSuccess = {
                                 isLoading = false
                                 onAuthSuccess()
@@ -603,7 +616,7 @@ fun AuthScreen(
                 )
 
                 Text(
-                    text = "Protected by email-scoped PostgreSQL RLS, Google Identity Services, Firebase App Check, and row-level tenancy rules.",
+                    text = "Protected by Supabase Auth, Google Identity Services, PostgreSQL Row Level Security, and row-level tenancy rules.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 4.dp)

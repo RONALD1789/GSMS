@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 class SupabaseWorkspaceController(
@@ -22,6 +25,8 @@ class SupabaseWorkspaceController(
 
     private fun newId(prefix: String): String =
         "${prefix}_${UUID.randomUUID().toString().replace("-", "").take(10)}"
+
+    private fun todayIso(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
     suspend fun boot(): Result<Unit> {
         _uiState.value = UiState.Loading
@@ -187,6 +192,30 @@ class SupabaseWorkspaceController(
         return Result.success("Active period updated to $year ($term)")
     }
 
+    private fun validateIctAssignment(role: PortalRole, permissions: List<String>): Result<String>? {
+        if (currentWorkspace()?.activeRole != PortalRole.ICT_ADMIN) return null
+        val allowedRoles = setOf(
+            PortalRole.TEACHER, PortalRole.CLASS_TEACHER, PortalRole.PARENT, PortalRole.STUDENT,
+            PortalRole.LIBRARIAN, PortalRole.TRANSPORT_MANAGER, PortalRole.WELFARE_NURSE,
+            PortalRole.ADMISSIONS_RECEPTION, PortalRole.PROCUREMENT_OFFICER, PortalRole.STOREKEEPER,
+            PortalRole.EXAMINATION_OFFICER, PortalRole.SCHOOL_COUNSELLOR
+        )
+        val allowedPermissions = setOf(
+            "VIEW_ACADEMICS", "EDIT_ACADEMICS", "VIEW_ATTENDANCE", "MARK_ATTENDANCE",
+            "VIEW_ASSIGNED_STUDENTS", "FILL_SUBMIT_REPORT_CARDS", "VIEW_OWN_PUBLISHED_REPORTS",
+            "VIEW_COMMUNICATIONS", "VIEW_ALERTS", "EDIT_OPERATIONS", "MANAGE_PROCUREMENT",
+            "MANAGE_INVENTORY", "MANAGE_ICT", "MANAGE_COUNSELLING", "MANAGE_HEALTH",
+            "MANAGE_ADMISSIONS", "MODERATE_EXAMS"
+        )
+        if (role !in allowedRoles) {
+            return Result.failure(IllegalArgumentException("ICT Admin can provision standard school roles only. School leadership and finance/HR roles must be provisioned by the School Admin or owner."))
+        }
+        if (permissions.any { it !in allowedPermissions }) {
+            return Result.failure(IllegalArgumentException("ICT Admin can delegate only approved academic, operational and ICT capabilities."))
+        }
+        return null
+    }
+
     suspend fun delegatePermissions(
         schoolId: String,
         assignment: UserAccessAssignment,
@@ -196,11 +225,28 @@ class SupabaseWorkspaceController(
         linkedStudentIds: List<String>,
         actorName: String
     ): Result<String> {
+        validateIctAssignment(assignment.resolvedRole(), extraPermissions)?.let { return it }
+        val normalizedLinkedStudentIds = linkedStudentIds.distinct().take(20)
+        val linkedBranchIds = if (
+            assignment.resolvedRole() == PortalRole.PARENT || assignment.resolvedRole() == PortalRole.STUDENT
+        ) {
+            currentWorkspace()
+                ?.takeIf { it.activeSchool?.id == schoolId }
+                ?.students
+                ?.filter { it.id in normalizedLinkedStudentIds }
+                ?.map { it.branchId }
+                .orEmpty()
+                .filter { it.isNotBlank() }
+                .distinct()
+        } else {
+            assignment.assignedBranchIds
+        }
         val updated = assignment.copy(
+            assignedBranchIds = linkedBranchIds.ifEmpty { assignment.assignedBranchIds },
             extraPermissions = extraPermissions.distinct().take(45),
             assignedClasses = assignedClasses.distinct().take(30),
             assignedSubjects = assignedSubjects.distinct().take(30),
-            linkedStudentIds = linkedStudentIds.distinct().take(20),
+            linkedStudentIds = normalizedLinkedStudentIds,
             updatedBy = actorName.take(100)
         )
         supabase.saveAccessAssignment(updated, userId, schoolId).getOrThrow()
@@ -221,10 +267,29 @@ class SupabaseWorkspaceController(
         extraPermissions: List<String>,
         actorName: String
     ): Result<String> {
+        validateIctAssignment(primaryRole, extraPermissions)?.let { return it }
+        if (primaryRole == PortalRole.SUPER_ADMIN) {
+            return Result.failure(IllegalArgumentException("SUPER_ADMIN is reserved for the verified school owner."))
+        }
+        val activeWorkspace = currentWorkspace()?.takeIf { it.activeSchool?.id == schoolId }
+        val mainBranchId = activeWorkspace?.branches?.firstOrNull { it.mainCampus }?.id ?: "branch_main"
+        val selectedBranchId = activeWorkspace?.activeBranchId
+            ?.takeIf { selected -> activeWorkspace.branches.any { it.id == selected } }
+            ?: mainBranchId
+        val linkedStudentBranches = if (primaryRole == PortalRole.PARENT || primaryRole == PortalRole.STUDENT) {
+            activeWorkspace?.students
+                ?.filter { it.id in linkedStudentIds }
+                ?.map { it.branchId }
+                .orEmpty()
+                .filter { it.isNotBlank() }
+        } else {
+            emptyList()
+        }
+        val assignedBranchIds = linkedStudentBranches.distinct().ifEmpty { listOf(selectedBranchId) }
         val item = UserAccessAssignment(
             id = newId("assign"), schoolId = schoolId, ownerId = userId,
             fullName = fullName.trim(), email = email.trim(), primaryRole = primaryRole.name,
-            assignedBranchIds = listOf("branch_main"), assignedClasses = assignedClasses,
+            assignedBranchIds = assignedBranchIds, assignedClasses = assignedClasses,
             assignedSubjects = assignedSubjects, linkedStudentIds = linkedStudentIds,
             extraPermissions = extraPermissions, active = true, updatedBy = actorName
         )
@@ -271,7 +336,7 @@ class SupabaseWorkspaceController(
             id = newId("att"), schoolId = school.id, branchId = branchId,
             academicYear = school.activeAcademicYear, term = school.activeTerm,
             ownerId = userId, targetType = "STUDENT", targetName = student.fullName,
-            className = student.className, dateIso = "2026-11-21", status = status
+            studentId = student.id, className = student.className, dateIso = todayIso(), status = status
         )
         supabase.saveAttendance(record, userId, school.id).getOrThrow()
         mutateSuccess { ws -> ws.copy(attendance = listOf(record) + ws.attendance) }
@@ -430,6 +495,49 @@ class SupabaseWorkspaceController(
         )
     }
 
+    suspend fun createFinanceInvoice(
+        school: School,
+        branchId: String,
+        student: Student,
+        title: String,
+        category: String,
+        amountUsd: Double
+    ): Result<String> {
+        if (amountUsd <= 0.0) return Result.failure(IllegalArgumentException("Invoice amount must be greater than zero."))
+        val id = newId("fin")
+        val invoice = FinanceEntry(
+            id = id,
+            schoolId = school.id,
+            branchId = branchId,
+            academicYear = school.activeAcademicYear,
+            term = school.activeTerm,
+            ownerId = userId,
+            entryType = "INVOICE",
+            referenceNo = "INV-${id.removePrefix("fin").uppercase()}",
+            title = title.trim(),
+            partyName = student.parentName.ifBlank { student.fullName },
+            category = category.trim().ifBlank { "Tuition" },
+            amountUsd = amountUsd,
+            paidUsd = 0.0,
+            status = "PENDING",
+            studentId = student.id
+        )
+        supabase.saveFinanceEntry(invoice, userId, school.id).getOrThrow()
+        val audit = AuditLog(
+            id = newId("aud"), schoolId = school.id, ownerId = userId,
+            actorName = currentWorkspace()?.userProfile?.displayName?.takeIf { it.isNotBlank() } ?: displayName,
+            actorRole = currentWorkspace()?.activeRole?.name.orEmpty(),
+            actionType = "FINANCE_INVOICE_CREATED",
+            moduleName = "FINANCE",
+            summary = "Created ${invoice.referenceNo} for ${student.fullName}"
+        )
+        supabase.appendAuditLog(audit, userId, school.id)
+        mutateSuccess { ws ->
+            ws.copy(finance = listOf(invoice) + ws.finance, auditLogs = listOf(audit) + ws.auditLogs)
+        }
+        return Result.success("Invoice ${invoice.referenceNo} created for ${student.fullName}")
+    }
+
     suspend fun recordFinancePayment(schoolId: String, entry: FinanceEntry, amountUsd: Double): Result<String> {
         val newPaid = (entry.paidUsd + amountUsd).coerceAtMost(entry.amountUsd)
         val nextStatus = if (newPaid >= entry.amountUsd) "PAID" else "PARTIAL"
@@ -448,12 +556,14 @@ class SupabaseWorkspaceController(
         body: String,
         actorName: String,
         senderRole: PortalRole,
-        aiDrafted: Boolean
+        aiDrafted: Boolean,
+        targetClass: String? = null
     ): Result<String> {
         val item = CommunicationItem(
             id = newId("comm"), schoolId = school.id, branchId = branchId, ownerId = userId,
             channel = channel, audience = audience, title = title.trim(), body = body.trim(),
-            senderName = actorName, senderRole = senderRole.name, aiDrafted = aiDrafted
+            senderName = actorName, senderRole = senderRole.name, aiDrafted = aiDrafted,
+            targetClass = targetClass?.trim()?.takeIf { it.isNotBlank() }
         )
         supabase.saveCommunication(item, userId, school.id).getOrThrow()
         mutateSuccess { ws -> ws.copy(communications = listOf(item) + ws.communications) }
@@ -484,6 +594,64 @@ class SupabaseWorkspaceController(
         return Result.success("Saved $moduleType record")
     }
 
+    suspend fun updateOperationRecord(
+        schoolId: String,
+        operation: OperationRecord,
+        title: String,
+        subtitle: String,
+        partyName: String,
+        metricLabel: String,
+        notes: String
+    ): Result<String> {
+        val updated = operation.copy(
+            title = title.trim(),
+            subtitle = subtitle.trim().ifBlank { null },
+            partyName = partyName.trim().ifBlank { null },
+            metricLabel = metricLabel.trim().ifBlank { null },
+            notes = notes.trim().ifBlank { null }
+        )
+        supabase.saveOperation(updated, userId, schoolId).getOrThrow()
+        val ws = currentWorkspace()
+        val audit = AuditLog(
+            id = newId("aud"), schoolId = schoolId, ownerId = userId,
+            actorName = ws?.userProfile?.displayName?.takeIf { it.isNotBlank() } ?: displayName,
+            actorRole = ws?.activeRole?.name.orEmpty(),
+            actionType = "OPERATION_RECORD_UPDATED",
+            moduleName = operation.moduleType,
+            summary = "Updated operational record: ${updated.title}"
+        )
+        supabase.appendAuditLog(audit, userId, schoolId)
+        mutateSuccess { state ->
+            state.copy(
+                operations = state.operations.map { if (it.id == updated.id) updated else it },
+                auditLogs = listOf(audit) + state.auditLogs
+            )
+        }
+        return Result.success("Saved changes to ${updated.title}")
+    }
+
+    suspend fun updateOperationStatus(schoolId: String, operation: OperationRecord, status: String): Result<String> {
+        val updated = operation.copy(status = status)
+        supabase.saveOperation(updated, userId, schoolId).getOrThrow()
+        val ws = currentWorkspace()
+        val audit = AuditLog(
+            id = newId("aud"), schoolId = schoolId, ownerId = userId,
+            actorName = ws?.userProfile?.displayName?.takeIf { it.isNotBlank() } ?: displayName,
+            actorRole = ws?.activeRole?.name.orEmpty(),
+            actionType = "OPERATION_STATUS_UPDATED",
+            moduleName = operation.moduleType,
+            summary = "${operation.title}: ${operation.status} → $status"
+        )
+        supabase.appendAuditLog(audit, userId, schoolId)
+        mutateSuccess { state ->
+            state.copy(
+                operations = state.operations.map { if (it.id == updated.id) updated else it },
+                auditLogs = listOf(audit) + state.auditLogs
+            )
+        }
+        return Result.success("Updated ${operation.title} to $status")
+    }
+
     suspend fun updateAlertStatus(schoolId: String, alert: EarlyWarningAlert, status: String): Result<String> {
         val updated = alert.copy(status = status)
         supabase.saveAlert(updated, userId, schoolId).getOrThrow()
@@ -498,9 +666,11 @@ class SupabaseWorkspaceController(
         actionType: String,
         summary: String
     ) {
+        val resolvedActorName = currentWorkspace()?.userProfile?.displayName
+            ?.takeIf { it.isNotBlank() } ?: actorName
         val log = AuditLog(
             id = newId("aud"), schoolId = schoolId, ownerId = userId,
-            actorName = actorName, actorRole = role.name, actionType = actionType,
+            actorName = resolvedActorName, actorRole = role.name, actionType = actionType,
             moduleName = "AI_TOOLS", summary = summary, aiAction = true
         )
         supabase.appendAuditLog(log, userId, schoolId)

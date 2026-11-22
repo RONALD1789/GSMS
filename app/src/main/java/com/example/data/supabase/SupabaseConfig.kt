@@ -23,7 +23,7 @@ data class SupabaseConfig(
 
         fun fromBuildConfig(): SupabaseConfig = SupabaseConfig(
             rawUrl = BuildConfig.SUPABASE_URL,
-            rawAnonKey = BuildConfig.SUPABASE_ANON_KEY
+            rawAnonKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY.ifBlank { BuildConfig.SUPABASE_ANON_KEY }
         )
 
         fun isValidSchoolId(schoolId: String?): Boolean =
@@ -39,12 +39,16 @@ data class SupabaseConfig(
                 return "Set SUPABASE_URL in the AI Studio Secrets panel (currently placeholder/empty)."
             }
             if (key.isEmpty() || key.contains("YOUR_SUPABASE_ANON_KEY", ignoreCase = true) ||
+                key.contains("YOUR_SUPABASE_PUBLISHABLE_KEY", ignoreCase = true) ||
                 key.contains("MY_SUPABASE", ignoreCase = true)
             ) {
-                return "Set SUPABASE_ANON_KEY in the AI Studio Secrets panel (currently placeholder/empty)."
+                return "Set SUPABASE_PUBLISHABLE_KEY (or legacy SUPABASE_ANON_KEY) in the AI Studio Secrets panel."
+            }
+            if (key.startsWith("sb_secret_", ignoreCase = true)) {
+                return "A Supabase secret/service-role key must never be used in the Android client. Use the publishable key."
             }
             if (key.length < 20) {
-                return "SUPABASE_ANON_KEY appears invalid or truncated."
+                return "SUPABASE_PUBLISHABLE_KEY appears invalid or truncated."
             }
 
             val uri = try {

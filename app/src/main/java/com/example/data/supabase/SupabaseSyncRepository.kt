@@ -1,6 +1,7 @@
 package com.example.data.supabase
 
 import android.util.Log
+import android.content.Context
 import com.example.model.*
 import com.example.ui.GsmsWorkspaceState
 import com.squareup.moshi.Moshi
@@ -42,8 +43,10 @@ data class SupabaseSyncState(
 )
 
 class SupabaseSyncRepository(
-    private val config: SupabaseConfig = SupabaseConfig.fromBuildConfig()
+    private val config: SupabaseConfig = SupabaseConfig.fromBuildConfig(),
+    appContext: Context? = null
 ) {
+    private val sessionStore = appContext?.let(::SupabaseSessionStore)
     // Strictly in-memory session state; never persisted to plaintext SharedPreferences or disk.
     @Volatile
     private var accessToken: String? = null
@@ -80,7 +83,7 @@ class SupabaseSyncRepository(
         val baseUrl = config.normalizedBaseUrl ?: return@lazy null
         val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val token = accessToken ?: config.trimmedAnonKey
@@ -172,6 +175,28 @@ class SupabaseSyncRepository(
         }
     }
 
+    suspend fun signInWithGoogleIdToken(
+        idToken: String,
+        email: String,
+        displayName: String? = null
+    ): Result<String> {
+        val api = apiService ?: return failState(config.validationError ?: "Supabase Secrets are not configured.")
+        val cleanEmail = email.trim()
+        if (idToken.isBlank() || !isValidEmailFormat(cleanEmail)) {
+            return Result.failure(IllegalArgumentException("Google did not return a valid identity token and email address."))
+        }
+        _state.update { it.copy(isBusy = true, lastError = null) }
+        return try {
+            val response = withContext(Dispatchers.IO) {
+                api.signInWithIdToken(body = SupabaseIdTokenRequest(idToken = idToken))
+            }
+            handleAuthResponse("Google Sign-In", cleanEmail, displayName, response)
+        } catch (e: Exception) {
+            Log.w(TAG, "Supabase Google sign-in failed: ${e.javaClass.simpleName}")
+            failState("Google sign-in failed: ${e.localizedMessage ?: "Network error"}")
+        }
+    }
+
     suspend fun signUp(
         email: String,
         password: String,
@@ -227,11 +252,56 @@ class SupabaseSyncRepository(
         }
     }
 
+    suspend fun restoreSession(): Result<Boolean> {
+        if (_sessionFlow.value != null) return Result.success(true)
+        val stored = sessionStore?.load() ?: return Result.success(false)
+        val api = apiService ?: return Result.failure(
+            IllegalStateException(config.validationError ?: "Supabase Secrets are not configured.")
+        )
+        _state.update { it.copy(isBusy = true, lastError = null) }
+        return try {
+            val response = withContext(Dispatchers.IO) {
+                api.refreshSession(body = SupabaseRefreshRequest(stored.refreshToken))
+            }
+            if (!response.isSuccessful) {
+                sessionStore?.clear()
+                accessToken = null
+                supabaseUserId = null
+                _sessionFlow.value = null
+                _state.update { it.copy(isBusy = false, isAuthenticated = false, authEmail = null) }
+                Result.failure(IllegalStateException(formatHttpError("Restore session", response.code(), response.errorBody())))
+            } else {
+                val body = response.body()
+                if (body?.accessToken.isNullOrBlank()) {
+                    sessionStore?.clear()
+                    _state.update { it.copy(isBusy = false, isAuthenticated = false) }
+                    Result.success(false)
+                } else {
+                    handleAuthResponse("Restore session", stored.email, stored.displayName, response)
+                    Result.success(true)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Supabase session restoration failed: ${e.javaClass.simpleName}")
+            _state.update { it.copy(isBusy = false, lastError = "Could not restore your Supabase session. Please sign in again.") }
+            Result.failure(e)
+        }
+    }
+
     suspend fun signOut(): Result<Unit> {
         val api = apiService
         val hadToken = !accessToken.isNullOrBlank()
+        // Revoke the server session while the current access token is still attached.
+        if (api != null && hadToken) {
+            try {
+                withContext(Dispatchers.IO) { api.signOut() }
+            } catch (e: Exception) {
+                Log.w(TAG, "Supabase remote sign-out could not be confirmed: ${e.javaClass.simpleName}")
+            }
+        }
         accessToken = null
         supabaseUserId = null
+        sessionStore?.clear()
         _sessionFlow.value = null
         _state.update {
             it.copy(
@@ -241,13 +311,6 @@ class SupabaseSyncRepository(
                 remoteCounts = emptyMap(),
                 lastError = null
             )
-        }
-        if (api != null && hadToken) {
-            try {
-                withContext(Dispatchers.IO) { api.signOut() }
-            } catch (_: Exception) {
-                // Local memory session already cleared.
-            }
         }
         return Result.success(Unit)
     }
@@ -268,18 +331,11 @@ class SupabaseSyncRepository(
             }
             val remoteSchools = schoolsResp.body().orEmpty().map { it.toDomain() }
             if (remoteSchools.isEmpty()) {
-                val starter = SupabaseSeedData.buildInitialWorkspaceState(
-                    uid = session.userId,
-                    displayName = session.displayName,
-                    email = session.email
+                return Result.failure(
+                    SecurityException(
+                        "No school workspace is assigned to this account. Ask your GSMS system administrator to provision your school access."
+                    )
                 )
-                pushWorkspace(
-                    workspace = starter,
-                    ownerUid = session.userId,
-                    actorRole = PortalRole.SUPER_ADMIN,
-                    actorExtra = emptySet()
-                ).onFailure { return Result.failure(it) }
-                return Result.success(starter)
             }
 
             val firstSchoolId = remoteSchools.first().id
@@ -318,7 +374,6 @@ class SupabaseSyncRepository(
                 coroutineScope {
                     val branchesD = async { readList("gsms_branches", api.fetchBranches(schoolIdFilter = filter)) { it.toDomain() } }
                     val accessD = async { readList("gsms_user_access_assignments", api.fetchAccessAssignments(schoolIdFilter = filter)) { it.toDomain() } }
-                    val studentsD = async { readList("gsms_students", api.fetchStudents(schoolIdFilter = filter)) { it.toDomain() } }
                     val staffD = async { readList("gsms_staff", api.fetchStaff(schoolIdFilter = filter)) { it.toDomain() } }
                     val academicsD = async { readList("gsms_academic_records", api.fetchAcademicRecords(schoolIdFilter = filter)) { it.toDomain() } }
                     val attendanceD = async { readList("gsms_attendance", api.fetchAttendance(schoolIdFilter = filter)) { it.toDomain() } }
@@ -337,12 +392,43 @@ class SupabaseSyncRepository(
                         it.active && it.email.equals(session.email, ignoreCase = true)
                     }
                     val isOwner = activeSchool.ownerId == session.userId
-                    val primaryRole = if (matchingAssignment != null && !isOwner) {
-                        matchingAssignment.resolvedRole()
+                    val assignedRole = matchingAssignment?.resolvedRole()
+                    val students = if (
+                        !isOwner && (assignedRole == PortalRole.PARENT || assignedRole == PortalRole.STUDENT)
+                    ) {
+                        readList(
+                            "gsms_parent_student_summaries",
+                            api.fetchParentStudentSummaries(schoolIdFilter = filter)
+                        ) { it.toDomain() }
+                    } else if (!isOwner && assignedRole == PortalRole.FINANCE_OFFICER) {
+                        readList(
+                            "gsms_finance_student_summaries",
+                            api.fetchFinanceStudentSummaries(schoolIdFilter = filter)
+                        ) { it.toDomain() }
+                    } else if (!isOwner && assignedRole == PortalRole.ADMISSIONS_RECEPTION) {
+                        readList(
+                            "gsms_admissions_student_summaries",
+                            api.fetchAdmissionsStudentSummaries(schoolIdFilter = filter)
+                        ) { it.toDomain() }
                     } else {
-                        PortalRole.SUPER_ADMIN
+                        readList(
+                            "gsms_students",
+                            api.fetchStudents(schoolIdFilter = filter)
+                        ) { it.toDomain() }
                     }
-                    val effectiveRole = if (primaryRole == PortalRole.SUPER_ADMIN) {
+                    if (!isOwner && matchingAssignment == null) {
+                        throw SecurityException(
+                            "Access denied: this account has no active access assignment for ${activeSchool.name}."
+                        )
+                    }
+                    val primaryRole = if (isOwner) {
+                        PortalRole.SUPER_ADMIN
+                    } else {
+                        matchingAssignment!!.resolvedRole()
+                    }
+                    // Only a verified school owner may switch between portal views.
+                    // Delegated users remain constrained to their assigned primary role.
+                    val effectiveRole = if (isOwner) {
                         roleOverride ?: PortalRole.SCHOOL_ADMIN
                     } else {
                         primaryRole
@@ -351,8 +437,22 @@ class SupabaseSyncRepository(
                     val assignedClasses = matchingAssignment?.assignedClasses.orEmpty()
                     val assignedSubjects = matchingAssignment?.assignedSubjects.orEmpty()
                     val linkedStudentIds = matchingAssignment?.linkedStudentIds.orEmpty()
-                    val resolvedBranch = activeBranchId?.takeIf { id -> branches.any { it.id == id } }
-                        ?: branches.firstOrNull()?.id ?: "branch_main"
+                    val allBranchIds = branches.map { it.id }
+                    val canAccessAllBranches = isOwner || primaryRole in setOf(
+                        PortalRole.SCHOOL_ADMIN,
+                        PortalRole.HEADTEACHER,
+                        PortalRole.DEPUTY_HEADTEACHER
+                    )
+                    val allowedBranchIds = if (canAccessAllBranches) {
+                        allBranchIds
+                    } else {
+                        matchingAssignment?.assignedBranchIds.orEmpty().filter { it in allBranchIds }
+                    }
+                    if (allowedBranchIds.isEmpty()) {
+                        throw SecurityException("Access denied: no active campus branch is assigned to this account.")
+                    }
+                    val resolvedBranch = activeBranchId?.takeIf { it in allowedBranchIds }
+                        ?: allowedBranchIds.first()
 
                     val profile = UserProfile(
                         id = session.userId,
@@ -364,7 +464,7 @@ class SupabaseSyncRepository(
                         activeBranchId = resolvedBranch,
                         activeRole = effectiveRole.name,
                         assignedSchoolId = schoolId,
-                        assignedBranchIds = matchingAssignment?.assignedBranchIds ?: branches.map { it.id }.ifEmpty { listOf("branch_main") },
+                        assignedBranchIds = allowedBranchIds,
                         assignedClasses = assignedClasses,
                         assignedSubjects = assignedSubjects,
                         linkedStudentIds = linkedStudentIds,
@@ -384,7 +484,7 @@ class SupabaseSyncRepository(
                         assignedClasses = assignedClasses,
                         assignedSubjects = assignedSubjects,
                         linkedStudentIds = linkedStudentIds,
-                        students = studentsD.await(),
+                        students = students,
                         staff = staffD.await(),
                         academics = academicsD.await(),
                         attendance = attendanceD.await(),
@@ -617,6 +717,34 @@ class SupabaseSyncRepository(
         ensureSuccess("gsms_audit_logs", api.insertAuditLogs(listOf(log.toSupabaseRow(ownerUid, schoolId))))
     }
 
+    suspend fun generateAiText(prompt: String): Result<String> {
+        val api = apiService ?: return failState(config.validationError ?: "Supabase is not configured.")
+        if (accessToken.isNullOrBlank()) {
+            return Result.failure(SecurityException("Sign in to Supabase before using GSMS AI."))
+        }
+        if (prompt.isBlank() || prompt.length > 24000) {
+            return Result.failure(IllegalArgumentException("AI prompt must contain between 1 and 24,000 characters."))
+        }
+        return try {
+            val response = withContext(Dispatchers.IO) {
+                api.invokeGsmsAi(SupabaseAiRequest(prompt = prompt))
+            }
+            if (!response.isSuccessful) {
+                Result.failure(IllegalStateException(formatHttpError("GSMS AI", response.code(), response.errorBody())))
+            } else {
+                val generatedText = response.body()?.text?.takeIf { it.isNotBlank() }
+                if (generatedText != null) {
+                    Result.success(generatedText)
+                } else {
+                    Result.failure(IllegalStateException(response.body()?.error ?: "GSMS AI returned an empty response."))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Supabase AI request failed: ${e.javaClass.simpleName}")
+            Result.failure(IllegalStateException("GSMS AI request failed: ${e.localizedMessage ?: "Network error"}"))
+        }
+    }
+
     private suspend fun runPostgrest(op: String, block: suspend (SupabaseApiService) -> Unit): Result<Unit> {
         val api = apiService ?: return Result.failure(IllegalStateException(config.validationError ?: "Supabase Secrets missing."))
         return try {
@@ -652,6 +780,11 @@ class SupabaseSyncRepository(
 
         accessToken = token
         supabaseUserId = uid
+        body.refreshToken?.takeIf { it.isNotBlank() }?.let { refresh ->
+            runCatching {
+                sessionStore?.save(StoredSupabaseSession(refresh, verifiedEmail, resolvedName))
+            }.onFailure { Log.w(TAG, "Could not persist encrypted Supabase session: ${it.javaClass.simpleName}") }
+        }
         _sessionFlow.value = SupabaseSession(
             userId = uid,
             email = verifiedEmail,
@@ -736,7 +869,15 @@ class SupabaseSyncRepository(
         private const val TAG = "SupabaseSyncRepository"
         private val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
 
-        val shared: SupabaseSyncRepository by lazy { SupabaseSyncRepository() }
+        @Volatile private var applicationContext: Context? = null
+
+        fun initialize(context: Context) {
+            applicationContext = context.applicationContext
+        }
+
+        val shared: SupabaseSyncRepository by lazy {
+            SupabaseSyncRepository(appContext = applicationContext)
+        }
 
         fun isValidEmailFormat(email: String): Boolean {
             val trimmed = email.trim()
@@ -747,8 +888,10 @@ class SupabaseSyncRepository(
             return role == PortalRole.SUPER_ADMIN ||
                 role == PortalRole.SCHOOL_ADMIN ||
                 role == PortalRole.ICT_ADMIN ||
-                role.has(RoleCapability.MANAGE_MODULES, extra) ||
-                role.has(RoleCapability.MANAGE_USER_PERMISSIONS, extra)
+                role.has(RoleCapability.MANAGE_MODULES) ||
+                RoleCapability.MANAGE_MODULES in extra ||
+                role.has(RoleCapability.MANAGE_USER_PERMISSIONS) ||
+                RoleCapability.MANAGE_USER_PERMISSIONS in extra
         }
     }
 }

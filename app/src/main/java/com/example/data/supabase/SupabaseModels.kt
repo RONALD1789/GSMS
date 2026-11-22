@@ -11,8 +11,19 @@ data class SupabaseAuthRequest(
 )
 
 @Keep
+data class SupabaseRefreshRequest(
+    @Json(name = "refresh_token") val refreshToken: String
+)
+
+@Keep
 data class SupabaseUserMetadata(
     @Json(name = "full_name") val fullName: String? = null
+)
+
+@Keep
+data class SupabaseIdTokenRequest(
+    val provider: String = "google",
+    @Json(name = "id_token") val idToken: String
 )
 
 @Keep
@@ -129,6 +140,22 @@ data class SbStudentRow(
 )
 
 @Keep
+data class SbParentStudentRow(
+    val id: String,
+    @Json(name = "school_id") val schoolId: String,
+    @Json(name = "branch_id") val branchId: String,
+    @Json(name = "owner_id") val ownerId: String,
+    @Json(name = "admission_no") val admissionNo: String,
+    @Json(name = "full_name") val fullName: String,
+    @Json(name = "class_name") val className: String,
+    val stream: String?,
+    @Json(name = "parent_name") val parentName: String,
+    @Json(name = "attendance_rate") val attendanceRate: Double,
+    @Json(name = "average_score") val averageScore: Double,
+    @Json(name = "fee_balance_usd") val feeBalanceUsd: Double
+)
+
+@Keep
 data class SbStaffRow(
     val id: String,
     @Json(name = "school_id") val schoolId: String,
@@ -174,6 +201,7 @@ data class SbAttendanceRow(
     @Json(name = "owner_id") val ownerId: String,
     @Json(name = "target_type") val targetType: String,
     @Json(name = "target_name") val targetName: String,
+    @Json(name = "student_id") val studentId: String? = null,
     @Json(name = "class_name") val className: String?,
     @Json(name = "date_iso") val dateIso: String,
     val status: String
@@ -230,7 +258,8 @@ data class SbFinanceRow(
     val category: String,
     @Json(name = "amount_usd") val amountUsd: Double,
     @Json(name = "paid_usd") val paidUsd: Double,
-    val status: String
+    val status: String,
+    @Json(name = "student_id") val studentId: String? = null
 )
 
 @Keep
@@ -265,7 +294,8 @@ data class SbCommRow(
     val body: String,
     @Json(name = "sender_name") val senderName: String,
     @Json(name = "sender_role") val senderRole: String,
-    @Json(name = "ai_drafted") val aiDrafted: Boolean
+    @Json(name = "ai_drafted") val aiDrafted: Boolean,
+    @Json(name = "target_class") val targetClass: String? = null
 )
 
 @Keep
@@ -418,6 +448,7 @@ fun AttendanceRecord.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: Str
     ownerId = ownerId.ifBlank { fallbackOwnerUid },
     targetType = targetType,
     targetName = targetName,
+    studentId = studentId,
     className = className,
     dateIso = dateIso,
     status = status
@@ -471,7 +502,8 @@ fun FinanceEntry.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: String)
     category = category,
     amountUsd = amountUsd,
     paidUsd = paidUsd,
-    status = status
+    status = status,
+    studentId = studentId
 )
 
 fun LeaveRequest.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: String): SbLeaveRow = SbLeaveRow(
@@ -504,7 +536,8 @@ fun CommunicationItem.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: St
     body = body,
     senderName = senderName,
     senderRole = senderRole,
-    aiDrafted = aiDrafted
+    aiDrafted = aiDrafted,
+    targetClass = targetClass
 )
 
 fun OperationRecord.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: String): SbOperationRow = SbOperationRow(
@@ -545,4 +578,16 @@ fun AuditLog.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: String): Sb
     moduleName = moduleName,
     summary = summary,
     aiAction = aiAction
+)
+
+
+@Keep
+data class SupabaseAiRequest(
+    val prompt: String
+)
+
+@Keep
+data class SupabaseAiResponse(
+    val text: String? = null,
+    val error: String? = null
 )

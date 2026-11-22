@@ -16,6 +16,18 @@ interface SupabaseApiService {
         @Body body: SupabaseAuthRequest
     ): Response<SupabaseAuthResponse>
 
+    @POST("auth/v1/token")
+    suspend fun refreshSession(
+        @Query("grant_type") grantType: String = "refresh_token",
+        @Body body: SupabaseRefreshRequest
+    ): Response<SupabaseAuthResponse>
+
+    @POST("auth/v1/token")
+    suspend fun signInWithIdToken(
+        @Query("grant_type") grantType: String = "id_token",
+        @Body body: SupabaseIdTokenRequest
+    ): Response<SupabaseAuthResponse>
+
     @POST("auth/v1/signup")
     suspend fun signUp(
         @Body body: SupabaseSignUpRequest
@@ -31,6 +43,11 @@ interface SupabaseApiService {
 
     @GET("rest/v1/")
     suspend fun pingPostgrest(): Response<ResponseBody>
+
+    @POST("functions/v1/gsms-ai")
+    suspend fun invokeGsmsAi(
+        @Body body: SupabaseAiRequest
+    ): Response<SupabaseAiResponse>
 
     // --- Upserts (Merge Duplicates) ---
 
@@ -96,7 +113,7 @@ interface SupabaseApiService {
 
     // --- Full Multi-Tenant Reads ---
 
-    @GET("rest/v1/gsms_schools")
+    @GET("rest/v1/gsms_school_summaries")
     suspend fun fetchSchools(
         @Query("select") select: String = "*"
     ): Response<List<SbSchoolRow>>
@@ -115,6 +132,24 @@ interface SupabaseApiService {
 
     @GET("rest/v1/gsms_students")
     suspend fun fetchStudents(
+        @Query("select") select: String = "*",
+        @Query("school_id") schoolIdFilter: String
+    ): Response<List<SbStudentRow>>
+
+    @GET("rest/v1/gsms_parent_student_summaries")
+    suspend fun fetchParentStudentSummaries(
+        @Query("select") select: String = "*",
+        @Query("school_id") schoolIdFilter: String
+    ): Response<List<SbParentStudentRow>>
+
+    @GET("rest/v1/gsms_finance_student_summaries")
+    suspend fun fetchFinanceStudentSummaries(
+        @Query("select") select: String = "*",
+        @Query("school_id") schoolIdFilter: String
+    ): Response<List<SbParentStudentRow>>
+
+    @GET("rest/v1/gsms_admissions_student_summaries")
+    suspend fun fetchAdmissionsStudentSummaries(
         @Query("select") select: String = "*",
         @Query("school_id") schoolIdFilter: String
     ): Response<List<SbStudentRow>>

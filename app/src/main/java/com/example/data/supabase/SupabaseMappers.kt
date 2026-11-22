@@ -47,6 +47,24 @@ fun SbAccessAssignmentRow.toDomain(): UserAccessAssignment = UserAccessAssignmen
     updatedBy = updatedBy
 )
 
+fun SbParentStudentRow.toDomain(): Student = Student(
+    id = id,
+    schoolId = schoolId,
+    branchId = branchId,
+    ownerId = ownerId,
+    admissionNo = admissionNo,
+    fullName = fullName,
+    className = className,
+    stream = stream,
+    parentName = parentName,
+    parentContact = null,
+    attendanceRate = attendanceRate,
+    averageScore = averageScore,
+    feeBalanceUsd = feeBalanceUsd,
+    riskLevel = "LOW",
+    welfareStatus = "Not disclosed"
+)
+
 fun SbStudentRow.toDomain(): Student = Student(
     id = id,
     schoolId = schoolId,
@@ -108,6 +126,7 @@ fun SbAttendanceRow.toDomain(): AttendanceRecord = AttendanceRecord(
     ownerId = ownerId,
     targetType = targetType,
     targetName = targetName,
+    studentId = studentId,
     className = className,
     dateIso = dateIso,
     status = status
@@ -161,7 +180,8 @@ fun SbFinanceRow.toDomain(): FinanceEntry = FinanceEntry(
     category = category,
     amountUsd = amountUsd,
     paidUsd = paidUsd,
-    status = status
+    status = status,
+    studentId = studentId
 )
 
 fun SbLeaveRow.toDomain(): LeaveRequest = LeaveRequest(
@@ -194,7 +214,8 @@ fun SbCommRow.toDomain(): CommunicationItem = CommunicationItem(
     body = body,
     senderName = senderName,
     senderRole = senderRole,
-    aiDrafted = aiDrafted
+    aiDrafted = aiDrafted,
+    targetClass = targetClass
 )
 
 fun SbOperationRow.toDomain(): OperationRecord = OperationRecord(

@@ -1,16 +1,10 @@
 package com.example.model
 
 import androidx.annotation.Keep
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.DocumentId
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.IgnoreExtraProperties
-import com.google.firebase.firestore.ServerTimestamp
 
 @Keep
-@IgnoreExtraProperties
 data class UserProfile(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val displayName: String = "",
     val email: String? = null,
@@ -25,8 +19,8 @@ data class UserProfile(
     val linkedStudentIds: List<String> = emptyList(),
     val extraPermissions: List<String> = emptyList(),
     val lowDataMode: Boolean = false,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 ) {
     fun resolvedPrimaryRole(): PortalRole =
         enumByNameOrDefault(primaryRole, PortalRole.SUPER_ADMIN)
@@ -45,30 +39,11 @@ data class UserProfile(
             enumValues<RoleCapability>().firstOrNull { it.name.equals(raw, ignoreCase = true) }
         }.toSet()
 
-    fun toCreateMap(): Map<String, Any> = mapOf(
-        "userId" to userId,
-        "displayName" to displayName,
-        "email" to email,
-        "primaryRole" to primaryRole,
-        "activeSchoolId" to activeSchoolId,
-        "activeBranchId" to activeBranchId,
-        "activeRole" to activeRole,
-        "assignedSchoolId" to assignedSchoolId,
-        "assignedBranchIds" to assignedBranchIds,
-        "assignedClasses" to assignedClasses,
-        "assignedSubjects" to assignedSubjects,
-        "linkedStudentIds" to linkedStudentIds,
-        "extraPermissions" to extraPermissions,
-        "lowDataMode" to lowDataMode,
-        "createdAt" to FieldValue.serverTimestamp(),
-        "updatedAt" to FieldValue.serverTimestamp()
-    ).filterValues { it != null } as Map<String, Any>
 }
 
 @Keep
-@IgnoreExtraProperties
 data class UserAccessAssignment(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val ownerId: String = "",
     val fullName: String = "",
@@ -81,8 +56,8 @@ data class UserAccessAssignment(
     val extraPermissions: List<String> = emptyList(),
     val active: Boolean = true,
     val updatedBy: String? = null,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 ) {
     fun resolvedRole(): PortalRole = enumByNameOrDefault(primaryRole, PortalRole.TEACHER)
 
@@ -93,9 +68,8 @@ data class UserAccessAssignment(
 }
 
 @Keep
-@IgnoreExtraProperties
 data class School(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val ownerId: String = "",
     val name: String = "",
     val code: String = "",
@@ -111,30 +85,28 @@ data class School(
     val staffCount: Long = 0L,
     val monthlyRevenueUsd: Double = 0.0,
     val churnRiskScore: Long = 0L,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 ) {
     fun hasModule(module: GsmsModule): Boolean = enabledModules.contains(module.name)
 }
 
 @Keep
-@IgnoreExtraProperties
 data class Branch(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val ownerId: String = "",
     val name: String = "",
     val code: String = "",
     val city: String = "",
     val mainCampus: Boolean = true,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class Student(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val branchId: String = "",
     val ownerId: String = "",
@@ -149,14 +121,13 @@ data class Student(
     val feeBalanceUsd: Double = 0.0,
     val riskLevel: String = RiskLevel.LOW.name,
     val welfareStatus: String = "Cleared",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class StaffMember(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val branchId: String = "",
     val ownerId: String = "",
@@ -169,14 +140,13 @@ data class StaffMember(
     val leaveUsedDays: Long = 0L,
     val onLeave: Boolean = false,
     val workloadHours: Long = 24L,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class AcademicRecord(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val branchId: String = "",
     val academicYear: String = "2026/2027",
@@ -191,14 +161,13 @@ data class AcademicRecord(
     val score: Double = 0.0,
     val maxScore: Double = 100.0,
     val grade: String? = null,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class AttendanceRecord(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val branchId: String = "",
     val academicYear: String = "2026/2027",
@@ -209,14 +178,14 @@ data class AttendanceRecord(
     val className: String? = null,
     val dateIso: String = "2026-11-21",
     val status: String = "PRESENT",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+    val studentId: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class ReportTemplate(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val ownerId: String = "",
     val name: String = "",
@@ -224,14 +193,13 @@ data class ReportTemplate(
     val sections: List<String> = emptyList(),
     val gradingScale: String = "A-F Percentage",
     val active: Boolean = true,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class ReportCard(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val branchId: String = "",
     val academicYear: String = "2026/2027",
@@ -251,14 +219,13 @@ data class ReportCard(
     val version: Long = 1L,
     val submittedBy: String? = null,
     val reviewedBy: String? = null,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class FinanceEntry(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val branchId: String = "",
     val academicYear: String = "2026/2027",
@@ -272,14 +239,14 @@ data class FinanceEntry(
     val amountUsd: Double = 0.0,
     val paidUsd: Double = 0.0,
     val status: String = "PENDING",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+    val studentId: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class LeaveRequest(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val branchId: String = "",
     val ownerId: String = "",
@@ -295,14 +262,13 @@ data class LeaveRequest(
     val status: String = LeaveStatus.PENDING.name,
     val reviewedBy: String? = null,
     val aiConflictNote: String? = null,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class CommunicationItem(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val branchId: String = "",
     val ownerId: String = "",
@@ -313,14 +279,14 @@ data class CommunicationItem(
     val senderName: String = "",
     val senderRole: String = "",
     val aiDrafted: Boolean = false,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+    val targetClass: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class OperationRecord(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val branchId: String = "",
     val ownerId: String = "",
@@ -331,14 +297,13 @@ data class OperationRecord(
     val status: String = "ACTIVE",
     val metricLabel: String? = null,
     val notes: String? = null,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class EarlyWarningAlert(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val branchId: String = "",
     val ownerId: String = "",
@@ -349,14 +314,13 @@ data class EarlyWarningAlert(
     val recommendedAction: String = "",
     val assignedRole: String = PortalRole.HEADTEACHER.name,
     val status: String = "OPEN",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: String? = null,
+    val updatedAt: String? = null
 )
 
 @Keep
-@IgnoreExtraProperties
 data class AuditLog(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val schoolId: String = "",
     val ownerId: String = "",
     val actorName: String = "",
@@ -365,5 +329,5 @@ data class AuditLog(
     val moduleName: String = "",
     val summary: String = "",
     val aiAction: Boolean = false,
-    @ServerTimestamp val createdAt: Timestamp? = null
+    val createdAt: String? = null
 )

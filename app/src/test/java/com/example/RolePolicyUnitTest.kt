@@ -40,6 +40,7 @@ class RolePolicyUnitTest {
         assertTrue(role.has(RoleCapability.MARK_ATTENDANCE))
         assertTrue(role.has(RoleCapability.FILL_SUBMIT_REPORT_CARDS))
         assertTrue(role.has(RoleCapability.APPLY_LEAVE))
+        assertTrue("My Leave" in RolePolicy.peopleSubTabs(role, fullSchool))
 
         assertFalse(role.has(RoleCapability.APPROVE_PUBLISH_REPORT_CARDS))
         assertFalse(role.has(RoleCapability.MANAGE_REPORT_TEMPLATES))
@@ -48,8 +49,9 @@ class RolePolicyUnitTest {
         assertFalse(role.has(RoleCapability.VIEW_AUDIT_LOGS))
         assertFalse(GsmsTab.OPERATIONS in RolePolicy.visibleTabs(role, fullSchool))
 
-        assertTrue(GsmsTab.OPERATIONS in RolePolicy.visibleTabs(PortalRole.CLASS_TEACHER, fullSchool))
-        assertEquals(listOf("Welfare", "Discipline"), RolePolicy.operationSections(PortalRole.CLASS_TEACHER, fullSchool))
+        assertFalse(GsmsTab.OPERATIONS in RolePolicy.visibleTabs(PortalRole.CLASS_TEACHER, fullSchool))
+        assertEquals(emptyList<String>(), RolePolicy.operationSections(PortalRole.CLASS_TEACHER, fullSchool))
+        assertTrue("My Leave" in RolePolicy.peopleSubTabs(PortalRole.CLASS_TEACHER, fullSchool))
 
         val students = listOf(
             Student(id = "stu_1", fullName = "Maya Lin", className = "Grade 10A"),
@@ -98,8 +100,8 @@ class RolePolicyUnitTest {
         assertEquals(listOf("stu_1"), filteredChildren.map { it.id })
 
         val financeEntries = listOf(
-            FinanceEntry(id = "1", entryType = "INVOICE", partyName = "Wei Lin", title = "Term 1 Tuition - Maya Lin"),
-            FinanceEntry(id = "2", entryType = "INVOICE", partyName = "Claire O'Connor", title = "Term 1 Tuition - Liam O'Connor"),
+            FinanceEntry(id = "1", entryType = "INVOICE", partyName = "Wei Lin", title = "Term 1 Tuition - Maya Lin", studentId = "stu_1"),
+            FinanceEntry(id = "2", entryType = "INVOICE", partyName = "Claire O'Connor", title = "Term 1 Tuition - Liam O'Connor", studentId = "stu_2"),
             FinanceEntry(id = "3", entryType = "PAYROLL", partyName = "Dr. Samuel")
         )
         val parentFinance = RolePolicy.filterFinanceForRole(PortalRole.PARENT, financeEntries, filteredChildren)
@@ -132,6 +134,21 @@ class RolePolicyUnitTest {
         assertFalse(PortalRole.EXAMINATION_OFFICER.has(RoleCapability.APPROVE_PUBLISH_REPORT_CARDS))
         assertTrue(PortalRole.ICT_ADMIN.has(RoleCapability.MANAGE_USER_PERMISSIONS))
         assertFalse(PortalRole.ICT_ADMIN.has(RoleCapability.RECORD_FINANCE_PAYMENT))
+
+        assertTrue(PortalRole.PROCUREMENT_OFFICER.has(RoleCapability.MANAGE_PROCUREMENT))
+        assertFalse(PortalRole.PROCUREMENT_OFFICER.has(RoleCapability.MANAGE_INVENTORY))
+        assertTrue(PortalRole.STOREKEEPER.has(RoleCapability.MANAGE_INVENTORY))
+        assertTrue(PortalRole.EXAMINATION_OFFICER.has(RoleCapability.MODERATE_EXAMS))
+        assertTrue(PortalRole.SCHOOL_COUNSELLOR.has(RoleCapability.MANAGE_COUNSELLING))
+        assertTrue(PortalRole.WELFARE_NURSE.has(RoleCapability.MANAGE_HEALTH))
+        assertTrue(PortalRole.ADMISSIONS_RECEPTION.has(RoleCapability.MANAGE_ADMISSIONS))
+        assertTrue(PortalRole.ICT_ADMIN.has(RoleCapability.MANAGE_ICT))
+        assertTrue(PortalRole.FINANCE_OFFICER.has(RoleCapability.CREATE_FINANCE_INVOICE))
+        assertTrue(PortalRole.SCHOOL_ADMIN.has(RoleCapability.CREATE_FINANCE_INVOICE))
+        assertTrue(RolePolicy.canManageOperationSection(PortalRole.PROCUREMENT_OFFICER, "Procurement"))
+        assertFalse(RolePolicy.canManageOperationSection(PortalRole.PROCUREMENT_OFFICER, "Stores"))
+        assertTrue(RolePolicy.canManageOperationSection(PortalRole.STOREKEEPER, "Stores"))
+        assertFalse(RolePolicy.canManageOperationSection(PortalRole.STOREKEEPER, "Procurement"))
     }
 
     @Test
@@ -153,6 +170,7 @@ class RolePolicyUnitTest {
         val teacherTabsWithExtra = RolePolicy.visibleTabs(PortalRole.TEACHER, fullSchool, extra)
         assertTrue(GsmsTab.OPERATIONS in teacherTabsWithExtra)
         assertEquals(listOf("Procurement"), RolePolicy.operationSections(PortalRole.TEACHER, fullSchool, extra))
+        assertTrue(RolePolicy.canManageOperationSection(PortalRole.TEACHER, "Procurement", extra))
     }
 
     @Test
@@ -187,8 +205,8 @@ class RolePolicyUnitTest {
     @Test
     fun parentFinance_isEmptyWithoutALearner_andScopedWithOne() {
         val entries = listOf(
-            FinanceEntry(id = "1", entryType = "INVOICE", partyName = "Amina Patel"),
-            FinanceEntry(id = "2", entryType = "INVOICE", partyName = "Brian Otieno"),
+            FinanceEntry(id = "1", entryType = "INVOICE", partyName = "Amina Patel", studentId = "stu_1"),
+            FinanceEntry(id = "2", entryType = "INVOICE", partyName = "Brian Otieno", studentId = "stu_2"),
             FinanceEntry(id = "3", entryType = "PAYROLL", partyName = "Brian Otieno")
         )
         assertTrue(RolePolicy.filterFinanceForRole(PortalRole.PARENT, entries, null).isEmpty())
