@@ -166,10 +166,13 @@ fun OperationsAndFinanceScreen(
                 "Library" -> setOf("LIBRARY_BOOK", "LIBRARY_BORROW")
                 "Transport" -> setOf("VEHICLE", "ROUTE", "TRIP")
                 "Welfare" -> setOf("WELFARE")
-                "Discipline" -> setOf("DISCIPLINE")
-                "Assets" -> setOf("INVENTORY", "ASSET")
+                "Discipline", "Counselling" -> setOf("DISCIPLINE", "COUNSELLING", "INTERVENTION", "SAFEGUARDING")
+                "Assets", "Stores" -> setOf("INVENTORY", "ASSET", "STOCK", "STOCK_ISSUE", "STOCK_RECEIPT")
                 "Hostel" -> setOf("HOSTEL")
                 "Admissions" -> setOf("ADMISSION")
+                "Procurement" -> setOf("PROCUREMENT", "REQUISITION", "PURCHASE_ORDER", "VENDOR", "RFQ")
+                "Examinations" -> setOf("EXAM", "EXAM_TIMETABLE", "INVIGILATION", "MARK_MODERATION")
+                "ICT" -> setOf("ICT_TICKET", "ICT_ASSET", "SYSTEM_INCIDENT", "ACCESS_REQUEST")
                 else -> setOf("EVENT")
             }
             val ops = workspace.operations.filter {
@@ -267,12 +270,18 @@ fun OperationsAndFinanceScreen(
             "Assets" -> "ASSET"
             "Hostel" -> "HOSTEL"
             "Admissions" -> "ADMISSION"
+            "Procurement" -> "REQUISITION"
+            "Stores" -> "STOCK"
+            "Examinations" -> "EXAM"
+            "Counselling" -> "COUNSELLING"
+            "ICT" -> "ICT_TICKET"
             else -> "EVENT"
         }
         var title by remember { mutableStateOf("") }
         var subtitle by remember { mutableStateOf("") }
         var party by remember { mutableStateOf("") }
         var metric by remember { mutableStateOf("") }
+        var notes by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showAddOpDialog = false },
             title = { Text("Add $activeSection Record") },
@@ -281,14 +290,15 @@ fun OperationsAndFinanceScreen(
                     OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
                     OutlinedTextField(value = subtitle, onValueChange = { subtitle = it }, label = { Text("Subtitle / Location") }, singleLine = true)
                     OutlinedTextField(value = party, onValueChange = { party = it }, label = { Text("Assigned To / Person") }, singleLine = true)
-                    OutlinedTextField(value = metric, onValueChange = { metric = it }, label = { Text("Metric / Badge") }, singleLine = true)
+                    OutlinedTextField(value = metric, onValueChange = { metric = it }, label = { Text("Metric / Status Reference") }, singleLine = true)
+                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Description / Notes") }, minLines = 2, maxLines = 4)
                 }
             },
             confirmButton = {
                 Button(onClick = {
                     if (title.isNotBlank()) {
                         viewModel.addOperationRecord(
-                            school, workspace.activeBranchId, defaultType, title, subtitle, party, "ACTIVE", metric, "", workspace.activeRole
+                            school, workspace.activeBranchId, defaultType, title, subtitle, party, "ACTIVE", metric, notes, workspace.activeRole
                         )
                         showAddOpDialog = false
                     }
