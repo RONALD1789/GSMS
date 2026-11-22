@@ -83,7 +83,7 @@ class SupabaseSyncRepository(
         val baseUrl = config.normalizedBaseUrl ?: return@lazy null
         val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val token = accessToken ?: config.trimmedAnonKey
