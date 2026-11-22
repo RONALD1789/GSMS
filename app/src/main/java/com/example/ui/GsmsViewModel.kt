@@ -325,13 +325,16 @@ class GsmsViewModel(
             "STOCK", "STOCK_ISSUE", "STOCK_RECEIPT" -> "Stores"
             "HOSTEL" -> "Hostel"
             "ADMISSION" -> "Admissions"
+            "FRONT_DESK" -> "Front Desk"
             "PROCUREMENT", "REQUISITION", "PURCHASE_ORDER", "VENDOR", "RFQ" -> "Procurement"
             "EXAM", "EXAM_TIMETABLE", "INVIGILATION", "MARK_MODERATION" -> "Examinations"
-            "ICT_TICKET", "ICT_ASSET", "SYSTEM_INCIDENT", "ACCESS_REQUEST" -> "ICT"
+            "ICT_TICKET", "ICT_ASSET", "SYSTEM_INCIDENT", "ACCESS_REQUEST" -> "ICT Systems"
             else -> "Events"
         }
-        if (!requireCapability(RoleCapability.EDIT_OPERATIONS, "add $sectionName records", actorRole) ||
-            sectionName !in RolePolicy.operationSections(actorRole, school)) {
+        val extra = (uiState.value as? UiState.Success)?.data
+            ?.takeIf { it.activeRole == actorRole }?.activeExtraCapabilities.orEmpty()
+        if (!RolePolicy.canManageOperationSection(actorRole, sectionName, extra) ||
+            sectionName !in RolePolicy.operationSections(actorRole, school, extra)) {
             _statusBanner.value = "Access denied: ${actorRole.shortTitle} cannot edit $sectionName records."
             return
         }
@@ -339,7 +342,28 @@ class GsmsViewModel(
     }
 
     fun updateOperationStatus(schoolId: String, operation: OperationRecord, status: String, role: PortalRole) {
-        if (!requireCapability(RoleCapability.EDIT_OPERATIONS, "update operational records", role)) return
+        val section = when (operation.moduleType) {
+            "LIBRARY_BOOK", "LIBRARY_BORROW" -> "Library"
+            "VEHICLE", "ROUTE", "TRIP" -> "Transport"
+            "WELFARE" -> "Welfare"
+            "DISCIPLINE" -> "Discipline"
+            "COUNSELLING", "INTERVENTION", "SAFEGUARDING" -> "Counselling"
+            "INVENTORY", "ASSET" -> "Assets"
+            "STOCK", "STOCK_ISSUE", "STOCK_RECEIPT" -> "Stores"
+            "HOSTEL" -> "Hostel"
+            "ADMISSION" -> "Admissions"
+            "FRONT_DESK" -> "Front Desk"
+            "PROCUREMENT", "REQUISITION", "PURCHASE_ORDER", "VENDOR", "RFQ" -> "Procurement"
+            "EXAM", "EXAM_TIMETABLE", "INVIGILATION", "MARK_MODERATION" -> "Examinations"
+            "ICT_TICKET", "ICT_ASSET", "SYSTEM_INCIDENT", "ACCESS_REQUEST" -> "ICT Systems"
+            else -> "Events"
+        }
+        val extra = (uiState.value as? UiState.Success)?.data
+            ?.takeIf { it.activeRole == role }?.activeExtraCapabilities.orEmpty()
+        if (!RolePolicy.canManageOperationSection(role, section, extra)) {
+            _statusBanner.value = "Access denied: ${role.shortTitle} cannot update $section records."
+            return
+        }
         launchMutation { workspaceController.updateOperationStatus(schoolId, operation, status) }
     }
 
