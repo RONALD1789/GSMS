@@ -41,6 +41,21 @@ class SupabaseConfigUnitTest {
     }
 
     @Test
+    fun supabasePublishableKey_isAcceptedAndSecretKeyIsRejected() {
+        val publishable = SupabaseConfig(
+            "https://abcdefghijklm.supabase.co",
+            "sb_publishable_123456789012345678901234"
+        )
+        assertTrue(publishable.isConfigured)
+
+        val secret = SupabaseConfig(
+            "https://abcdefghijklm.supabase.co",
+            "sb_secret_123456789012345678901234"
+        )
+        assertFalse(secret.isConfigured)
+    }
+
+    @Test
     fun insecureAndLocalPrivateHosts_areBlocked() {
         val httpConfig = SupabaseConfig("http://abcdefghijklm.supabase.co", validAnonKey)
         assertFalse(httpConfig.isConfigured)
@@ -93,7 +108,7 @@ class SupabaseConfigUnitTest {
     fun domainMappers_preserveMultiTenantColumns() {
         val school = School(
             id = "school_1",
-            ownerId = "firebase_uid_1",
+            ownerId = "legacy_owner_uid_1",
             name = "Greenwood Academy",
             code = "GWA-01",
             country = "Kenya",
