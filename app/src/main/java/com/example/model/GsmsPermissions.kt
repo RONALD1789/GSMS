@@ -90,6 +90,7 @@ object RolePolicy {
             RoleCapability.MANAGE_USER_PERMISSIONS
         ),
         PortalRole.SCHOOL_ADMIN to setOf(
+            RoleCapability.CREATE_FINANCE_INVOICE,
             RoleCapability.VIEW_ACADEMICS,
             RoleCapability.EDIT_ACADEMICS,
             RoleCapability.VIEW_ATTENDANCE,
