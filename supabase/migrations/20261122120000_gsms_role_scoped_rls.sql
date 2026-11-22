@@ -192,7 +192,7 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $
+as $$
   select exists (
     select 1
     from public.gsms_user_access_assignments a
@@ -204,7 +204,7 @@ as $
         from unnest(a.extra_permissions) as p(permission_name)
       )
   );
-$;
+$$;
 
 create or replace function public.gsms_is_school_member(target_school_id text)
 returns boolean
@@ -256,7 +256,7 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $
+as $$
   select
     public.gsms_is_school_manager(target_school_id)
     or public.gsms_has_any_role(target_school_id, array['HEADTEACHER'])
@@ -328,7 +328,7 @@ as $
       upper(target_module_type) in ('EXAM', 'EXAM_TIMETABLE', 'INVIGILATION', 'MARK_MODERATION')
       and public.gsms_has_extra_permission(target_school_id, 'MODERATE_EXAMS')
     );
-$;
+$$;
 
 create or replace function public.gsms_can_view_operation(
   target_school_id text,
@@ -339,7 +339,7 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $
+as $$
   select public.gsms_can_manage_operation(target_school_id, target_module_type)
     or public.gsms_has_any_role(target_school_id, array['DEPUTY_HEADTEACHER'])
     or (
@@ -358,7 +358,7 @@ as $
       upper(target_module_type) in ('WELFARE', 'HOSTEL')
       and public.gsms_has_any_role(target_school_id, array['SCHOOL_COUNSELLOR'])
     );
-$;
+$$;
 
 create or replace function public.gsms_can_access_class(
   target_school_id text,
@@ -557,10 +557,10 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $
+as $$
   select public.gsms_is_school_manager(target_school_id)
       or public.gsms_has_any_role(target_school_id, array['ICT_ADMIN']);
-$;
+$$;
 
 -- Do not expose helper functions to anonymous clients.
 revoke all on function public.gsms_is_school_owner(text) from public, anon;
