@@ -289,6 +289,35 @@ as $
     );
 $;
 
+create or replace function public.gsms_can_view_operation(
+  target_school_id text,
+  target_module_type text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select public.gsms_can_manage_operation(target_school_id, target_module_type)
+    or (
+      upper(target_module_type) in ('PROCUREMENT', 'REQUISITION', 'PURCHASE_ORDER', 'VENDOR', 'RFQ')
+      and public.gsms_has_any_role(target_school_id, array['FINANCE_OFFICER', 'STOREKEEPER'])
+    )
+    or (
+      upper(target_module_type) in ('STOCK', 'STOCK_ISSUE', 'STOCK_RECEIPT', 'INVENTORY', 'ASSET')
+      and public.gsms_has_any_role(target_school_id, array['PROCUREMENT_OFFICER', 'ICT_ADMIN'])
+    )
+    or (
+      upper(target_module_type) in ('DISCIPLINE', 'COUNSELLING', 'INTERVENTION', 'SAFEGUARDING')
+      and public.gsms_has_any_role(target_school_id, array['WELFARE_NURSE'])
+    )
+    or (
+      upper(target_module_type) in ('WELFARE', 'HOSTEL')
+      and public.gsms_has_any_role(target_school_id, array['SCHOOL_COUNSELLOR'])
+    );
+$;
+
 create or replace function public.gsms_is_school_member(target_school_id text)
 returns boolean
 language sql
@@ -670,35 +699,6 @@ with check (public.gsms_is_school_manager(school_id));
 create policy "gsms_branches_manager_delete" on public.gsms_branches
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
-
-create or replace function public.gsms_can_view_operation(
-  target_school_id text,
-  target_module_type text
-)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $
-  select public.gsms_can_manage_operation(target_school_id, target_module_type)
-    or (
-      upper(target_module_type) in ('PROCUREMENT', 'REQUISITION', 'PURCHASE_ORDER', 'VENDOR', 'RFQ')
-      and public.gsms_has_any_role(target_school_id, array['FINANCE_OFFICER', 'STOREKEEPER'])
-    )
-    or (
-      upper(target_module_type) in ('STOCK', 'STOCK_ISSUE', 'STOCK_RECEIPT', 'INVENTORY', 'ASSET')
-      and public.gsms_has_any_role(target_school_id, array['PROCUREMENT_OFFICER', 'ICT_ADMIN'])
-    )
-    or (
-      upper(target_module_type) in ('DISCIPLINE', 'COUNSELLING', 'INTERVENTION', 'SAFEGUARDING')
-      and public.gsms_has_any_role(target_school_id, array['WELFARE_NURSE'])
-    )
-    or (
-      upper(target_module_type) in ('WELFARE', 'HOSTEL')
-      and public.gsms_has_any_role(target_school_id, array['SCHOOL_COUNSELLOR'])
-    );
-$;
 
 -- USER ACCESS ASSIGNMENTS: users may read their own assignment. School managers may
 -- read/manage all assignments. SUPER_ADMIN is reserved for the verified owner session, not an assignment.
