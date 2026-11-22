@@ -200,11 +200,52 @@ as $
       and a.active = true
       and a.auth_user_id = (select auth.uid())
       and upper(capability_name) = any (
-        select upper(permission_name)
-        from unnest(a.extra_permissions) permission_name
+        select upper(p.permission_name)
+        from unnest(a.extra_permissions) as p(permission_name)
       )
   );
 $;
+
+create or replace function public.gsms_is_school_member(target_school_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.gsms_is_school_owner(target_school_id)
+      or exists (
+        select 1
+        from public.gsms_user_access_assignments a
+        where a.school_id = target_school_id
+          and a.active = true
+          and a.auth_user_id = (select auth.uid())
+      );
+$$;
+
+create or replace function public.gsms_can_access_school(target_school_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.gsms_is_school_member(target_school_id);
+$$;
+
+revoke all on function public.gsms_can_access_school(text) from public, anon;
+grant execute on function public.gsms_can_access_school(text) to authenticated;
+
+create or replace function public.gsms_is_school_manager(target_school_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select public.gsms_is_school_owner(target_school_id)
+      or public.gsms_has_any_role(target_school_id, array['SCHOOL_ADMIN', 'ICT_ADMIN']);
+$$;
 
 create or replace function public.gsms_can_manage_operation(
   target_school_id text,
@@ -317,47 +358,6 @@ as $
       and public.gsms_has_any_role(target_school_id, array['SCHOOL_COUNSELLOR'])
     );
 $;
-
-create or replace function public.gsms_is_school_member(target_school_id text)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select public.gsms_is_school_owner(target_school_id)
-      or exists (
-        select 1
-        from public.gsms_user_access_assignments a
-        where a.school_id = target_school_id
-          and a.active = true
-          and a.auth_user_id = (select auth.uid())
-      );
-$$;
-
-create or replace function public.gsms_can_access_school(target_school_id text)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select public.gsms_is_school_member(target_school_id);
-$$;
-
-revoke all on function public.gsms_can_access_school(text) from public, anon;
-grant execute on function public.gsms_can_access_school(text) to authenticated;
-
-create or replace function public.gsms_is_school_manager(target_school_id text)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, pg_temp
-as $$
-  select public.gsms_is_school_owner(target_school_id)
-      or public.gsms_has_any_role(target_school_id, array['SCHOOL_ADMIN', 'ICT_ADMIN']);
-$$;
 
 create or replace function public.gsms_can_access_class(
   target_school_id text,
