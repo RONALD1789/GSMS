@@ -55,7 +55,7 @@ class GsmsViewModel(
     private val currentUserId: String,
     private val userDisplayName: String,
     private val userEmail: String?,
-    supabaseRepository: SupabaseSyncRepository
+    private val supabaseRepository: SupabaseSyncRepository
 ) : ViewModel() {
     private val workspaceController = SupabaseWorkspaceController(
         supabase = supabaseRepository,
@@ -125,6 +125,109 @@ class GsmsViewModel(
 
     fun toggleLowDataMode(enabled: Boolean) {
         launchMutation { workspaceController.toggleLowDataMode(enabled) }
+    }
+
+    fun createBranch(schoolId: String, name: String, code: String, city: String) {
+        if (!requireCapability(RoleCapability.MANAGE_BRANCHES, "create branches")) return
+        launchMutation { workspaceController.createBranch(schoolId, name, code, city, currentActorName(), currentActiveRole) }
+    }
+
+    fun delegateUserPermissions(
+        schoolId: String,
+        assignment: UserAccessAssignment,
+        extraPermissions: List<String>,
+        assignedClasses: List<String>,
+        assignedSubjects: List<String>,
+        linkedStudentIds: List<String>
+    ) {
+        if (!requireCapability(RoleCapability.MANAGE_USER_PERMISSIONS, "delegate user permissions")) return
+        launchMutation {
+            workspaceController.delegatePermissions(
+                schoolId, assignment, extraPermissions, assignedClasses,
+                assignedSubjects, linkedStudentIds, currentActorName()
+            )
+        }
+    }
+
+    fun createAccessAssignment(
+        schoolId: String,
+        fullName: String,
+        email: String,
+        primaryRole: PortalRole,
+        assignedClasses: List<String>,
+        assignedSubjects: List<String>,
+        linkedStudentIds: List<String>,
+        extraPermissions: List<String>
+    ) {
+        if (!requireCapability(RoleCapability.MANAGE_USER_PERMISSIONS, "provision portal access")) return
+        launchMutation {
+            workspaceController.createAccessAssignment(
+                schoolId, fullName, email, primaryRole, assignedClasses,
+                assignedSubjects, linkedStudentIds, extraPermissions, currentActorName()
+            )
+        }
+    }
+
+    fun signOutSupabase() {
+        viewModelScope.launch {
+            supabaseRepository.signOut().onFailure {
+                _statusBanner.value = it.localizedMessage ?: "Supabase sign-out failed."
+            }
+        }
+    }
+
+    fun signInSupabase(email: String, password: String) {
+        viewModelScope.launch {
+            supabaseRepository.signIn(email, password).onFailure {
+                _statusBanner.value = it.localizedMessage ?: "Supabase sign-in failed."
+            }.onSuccess { _statusBanner.value = it }
+        }
+    }
+
+    fun signUpSupabase(email: String, password: String) {
+        viewModelScope.launch {
+            supabaseRepository.signUp(email, password).onFailure {
+                _statusBanner.value = it.localizedMessage ?: "Supabase registration failed."
+            }.onSuccess { _statusBanner.value = it }
+        }
+    }
+
+    fun testSupabaseConnection() {
+        viewModelScope.launch {
+            supabaseRepository.testConnection().onFailure {
+                _statusBanner.value = it.localizedMessage ?: "Supabase connection test failed."
+            }.onSuccess { _statusBanner.value = it }
+        }
+    }
+
+    fun pushWorkspaceToSupabase() {
+        val ws = (uiState.value as? UiState.Success)?.data ?: run {
+            _statusBanner.value = "Workspace is not ready to sync."
+            return
+        }
+        viewModelScope.launch {
+            supabaseRepository.pushWorkspace(
+                ws, currentUserId, ws.activeRole, ws.activeExtraCapabilities
+            ).onFailure {
+                _statusBanner.value = it.localizedMessage ?: "Supabase sync failed."
+            }.onSuccess { _statusBanner.value = it }
+        }
+    }
+
+    fun refreshSupabaseCounts() {
+        viewModelScope.launch {
+            supabaseRepository.refreshCounts().onFailure {
+                _statusBanner.value = it.localizedMessage ?: "Could not refresh Supabase counts."
+            }.onSuccess { counts -> _statusBanner.value = "Verified counts for ${counts.size} Supabase tables." }
+        }
+    }
+
+    fun toggleSupabaseAutoMirror(enabled: Boolean) {
+        supabaseRepository.toggleAutoMirror(enabled)
+            .onFailure { _statusBanner.value = it.localizedMessage ?: "Could not change auto-sync setting." }
+            .onSuccess { active ->
+                _statusBanner.value = if (active) "Supabase auto-sync enabled." else "Supabase auto-sync paused."
+            }
     }
 
     fun toggleModule(school: School, module: GsmsModule, role: PortalRole) {
