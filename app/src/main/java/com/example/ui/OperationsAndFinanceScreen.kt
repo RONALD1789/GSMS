@@ -340,18 +340,18 @@ fun OperationsAndFinanceScreen(
             else -> "EVENT"
         }
         val fieldLabels = when (activeSection) {
-            "Procurement" -> listOf("Requisition / Purchase Order", "Supplier / Requester", "PO Number / Budget", "Scope / Justification")
-            "Stores", "Assets" -> listOf("Stock Item / Asset", "Store / Location", "Quantity / Unit / Reorder Level", "Condition / Stock Notes")
-            "Examinations" -> listOf("Exam / Assessment", "Class / Subject", "Exam Date / Paper Reference", "Instructions / Moderation Notes")
-            "Counselling", "Discipline" -> listOf("Case / Intervention", "Learner / Assigned Counsellor", "Priority / Follow-up Date", "Confidential Case Notes")
-            "ICT", "ICT Systems" -> listOf("Support Ticket / Incident", "Device / Requester", "Priority / Ticket Reference", "Issue Details / Resolution Notes")
-            "Front Desk" -> listOf("Visitor / Inquiry", "Contact / Purpose", "Visit Date / Reference", "Reception Notes")
-            "Welfare" -> listOf("Clinic / Welfare Case", "Learner / Nurse", "Priority / Follow-up Date", "Care Notes")
-            "Hostel" -> listOf("Boarding Record", "Learner / House", "Room / Bed", "Boarding Notes")
-            "Transport" -> listOf("Vehicle / Route / Trip", "Driver / Assigned Staff", "Route / Mileage", "Trip / Maintenance Notes")
-            "Library" -> listOf("Book / Borrowing Record", "Borrower / Class", "Accession / Due Date", "Library Notes")
-            "Admissions" -> listOf("Applicant / Admission", "Parent / Guardian", "Application / Class", "Admission Notes")
-            else -> listOf("Record Title", "Assigned To / Person", "Metric / Reference", "Description / Notes")
+            "Procurement" -> listOf("Requisition / Purchase Order", "Item / Delivery Location", "Supplier / Requester", "PO Number / Budget", "Scope / Justification")
+            "Stores", "Assets" -> listOf("Stock Item / Asset", "Store / Location", "Supplier / Custodian", "Quantity / Unit / Reorder Level", "Condition / Stock Notes")
+            "Examinations" -> listOf("Exam / Assessment", "Class / Subject", "Exam Officer / Department", "Exam Date / Paper Reference", "Instructions / Moderation Notes")
+            "Counselling", "Discipline" -> listOf("Case / Intervention", "Concern / Referral Source", "Learner / Assigned Counsellor", "Priority / Follow-up Date", "Confidential Case Notes")
+            "ICT", "ICT Systems" -> listOf("Support Ticket / Incident", "System / Device", "Requester / Assigned Technician", "Priority / Ticket Reference", "Issue Details / Resolution Notes")
+            "Front Desk" -> listOf("Visitor / Inquiry", "Visit Purpose", "Visitor / Contact", "Visit Date / Reference", "Reception Notes")
+            "Welfare" -> listOf("Clinic / Welfare Case", "Concern / Location", "Learner / Nurse", "Priority / Follow-up Date", "Care Notes")
+            "Hostel" -> listOf("Boarding Record", "House / Room", "Learner / Warden", "Room / Bed", "Boarding Notes")
+            "Transport" -> listOf("Vehicle / Route / Trip", "Route / Destination", "Driver / Assigned Staff", "Route / Mileage", "Trip / Maintenance Notes")
+            "Library" -> listOf("Book / Borrowing Record", "Title / Shelf", "Borrower / Class", "Accession / Due Date", "Library Notes")
+            "Admissions" -> listOf("Applicant / Admission", "Requested Class / Intake", "Parent / Guardian", "Application / Reference", "Admission Notes")
+            else -> listOf("Record Title", "Description / Location", "Assigned To / Person", "Metric / Reference", "Description / Notes")
         }
         var title by remember { mutableStateOf("") }
         var subtitle by remember { mutableStateOf("") }
@@ -366,9 +366,9 @@ fun OperationsAndFinanceScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(fieldLabels[0]) }, singleLine = true)
                     OutlinedTextField(value = subtitle, onValueChange = { subtitle = it }, label = { Text(fieldLabels[1]) }, singleLine = true)
-                    OutlinedTextField(value = party, onValueChange = { party = it }, label = { Text(fieldLabels[1]) }, singleLine = true)
-                    OutlinedTextField(value = metric, onValueChange = { metric = it }, label = { Text(fieldLabels[2]) }, singleLine = true)
-                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text(fieldLabels[3]) }, minLines = 2, maxLines = 4)
+                    OutlinedTextField(value = party, onValueChange = { party = it }, label = { Text(fieldLabels[2]) }, singleLine = true)
+                    OutlinedTextField(value = metric, onValueChange = { metric = it }, label = { Text(fieldLabels[3]) }, singleLine = true)
+                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text(fieldLabels[4]) }, minLines = 2, maxLines = 4)
                     Text("Workflow status", style = MaterialTheme.typography.labelMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("PENDING", "IN_PROGRESS", "COMPLETED").forEach { status ->
