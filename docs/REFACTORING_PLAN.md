@@ -9,6 +9,8 @@ Refactor in small, reviewable steps. Each step must preserve existing behavior, 
 - [x] Inspect the existing Android, Firebase and Supabase structure.
 - [x] Create a dedicated refactoring branch.
 - [x] Document the current architecture and target boundaries.
+- [x] Move seed-data implementation into a dedicated data/seed package.
+- [x] Isolate Firestore client configuration in a dedicated Firebase data provider.
 - [ ] Run the existing unit, instrumentation and Firestore rules test suites in a configured build environment.
 - [ ] Record baseline build and test results before moving implementation files.
 
@@ -78,4 +80,8 @@ Large files identified during inspection include:
 - ui/PortalDashboards.kt (~37 KB)
 - Several feature screens between ~15 KB and ~49 KB
 
-The first code-moving pull request should be limited to one cohesive boundary and include the corresponding import updates and tests.
+The first code-moving increment has moved the seed-data object to data/seed and extracted Firestore client setup to data/firebase/FirestoreProvider.kt. GsmsRepository remains the compatibility facade and still owns operational Firestore queries and mutations.
+
+The Android build has not been executed in this environment. There is no GitHub Actions workflow configured in the repository, so the changes require a local Gradle build before merge.
+
+The next code-moving pull request should split GsmsRepository by domain while retaining a compatibility facade and preserving Firestore collection paths and security semantics.
