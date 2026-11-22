@@ -148,12 +148,12 @@ object SupabaseSeedData {
         val attendance = listOf(
             AttendanceRecord(
                 id = "att_1_$shortUid", schoolId = mainSchoolId, branchId = "branch_main", ownerId = uid,
-                targetType = "STUDENT", targetName = "Maya Lin", className = "Grade 10A",
+                targetType = "STUDENT", targetName = "Maya Lin", studentId = "stu_1_$shortUid", className = "Grade 10A",
                 dateIso = "2026-11-21", status = "PRESENT"
             ),
             AttendanceRecord(
                 id = "att_2_$shortUid", schoolId = mainSchoolId, branchId = "branch_main", ownerId = uid,
-                targetType = "STUDENT", targetName = "Daniel Okafor", className = "Grade 10A",
+                targetType = "STUDENT", targetName = "Daniel Okafor", studentId = "stu_2_$shortUid", className = "Grade 10A",
                 dateIso = "2026-11-21", status = "ABSENT"
             )
         )
