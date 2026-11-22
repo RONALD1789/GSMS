@@ -19,7 +19,10 @@ as $$
     select 1
     from public.gsms_schools s
     where s.id = target_school_id
-      and s.supabase_owner_uid = (select auth.uid())
+      and (
+        s.supabase_owner_uid = (select auth.uid())
+        or s.owner_id = (select auth.uid())::text
+      )
   );
 $$;
 
@@ -276,8 +279,11 @@ with check (supabase_owner_uid = (select auth.uid()));
 
 create policy "gsms_schools_owner_update" on public.gsms_schools
 for update to authenticated
-using (supabase_owner_uid = (select auth.uid()))
-with check (supabase_owner_uid = (select auth.uid()));
+using (public.gsms_is_school_owner(id))
+with check (
+  supabase_owner_uid = (select auth.uid())
+  or owner_id = (select auth.uid())::text
+);
 
 create policy "gsms_schools_owner_delete" on public.gsms_schools
 for delete to authenticated
