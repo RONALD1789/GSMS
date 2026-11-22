@@ -113,7 +113,7 @@ interface SupabaseApiService {
 
     // --- Full Multi-Tenant Reads ---
 
-    @GET("rest/v1/gsms_schools")
+    @GET("rest/v1/gsms_school_summaries")
     suspend fun fetchSchools(
         @Query("select") select: String = "*"
     ): Response<List<SbSchoolRow>>
