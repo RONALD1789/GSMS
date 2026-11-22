@@ -44,4 +44,4 @@ The current access bootstrap expects the role-scoped Supabase migration to have 
 
 ## Implementation status
 
-This commit establishes the deployable web application shell, Supabase sign-in, active assignment lookup, tenant context, responsive navigation, and role-filtered module entry points. Individual modules still need to be connected to their verified table contracts and workflows before they should be treated as production-complete.
+This branch now includes Supabase sign-in, active assignment lookup, tenant context, responsive role-filtered navigation, searchable/paginated data workspaces for the verified GSMS tables and summary views, and report-card submit/approve/publish actions. Most other data modules are currently read-only. Create/edit forms, detailed module workflows, exports, messaging delivery integrations and end-to-end role testing remain before production-complete release.
