@@ -294,7 +294,8 @@ data class SbCommRow(
     val body: String,
     @Json(name = "sender_name") val senderName: String,
     @Json(name = "sender_role") val senderRole: String,
-    @Json(name = "ai_drafted") val aiDrafted: Boolean
+    @Json(name = "ai_drafted") val aiDrafted: Boolean,
+    @Json(name = "target_class") val targetClass: String? = null
 )
 
 @Keep
@@ -535,7 +536,8 @@ fun CommunicationItem.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: St
     body = body,
     senderName = senderName,
     senderRole = senderRole,
-    aiDrafted = aiDrafted
+    aiDrafted = aiDrafted,
+    targetClass = targetClass
 )
 
 fun OperationRecord.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: String): SbOperationRow = SbOperationRow(
