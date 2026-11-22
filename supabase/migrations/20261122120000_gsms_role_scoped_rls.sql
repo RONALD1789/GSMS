@@ -411,7 +411,7 @@ select
   s.full_name,
   s.class_name,
   s.stream,
-  s.parent_name,
+  ''::text as parent_name,
   s.attendance_rate,
   s.average_score,
   s.fee_balance_usd
