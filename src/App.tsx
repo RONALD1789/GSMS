@@ -21,12 +21,12 @@ const roles = ["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","DEPUTY_HEADTEACHER","
 const modules: ModuleItem[] = [
   {label:"Overview",icon:LayoutDashboard,group:"Workspace",roles},
   {label:"Students",icon:GraduationCap,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","DEPUTY_HEADTEACHER","TEACHER","CLASS_TEACHER","PARENT","STUDENT"]},
-  {label:"Admissions",icon:Users,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER"]},
+  {label:"Admissions",icon:Users,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","ADMISSIONS_RECEPTION"]},
   {label:"Classes & subjects",icon:BookOpen,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","DEPUTY_HEADTEACHER","TEACHER","CLASS_TEACHER","EXAMINATION_OFFICER"]},
   {label:"Attendance",icon:ClipboardCheck,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","DEPUTY_HEADTEACHER","TEACHER","CLASS_TEACHER","PARENT","STUDENT","EXAMINATION_OFFICER"]},
-  {label:"Assessments & reports",icon:CheckCircle2,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","TEACHER","PARENT","STUDENT"]},
-  {label:"Timetable",icon:CalendarDays,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","TEACHER","PARENT","STUDENT"]},
-  {label:"Staff",icon:Users,group:"People",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER"]},
+  {label:"Assessments & reports",icon:CheckCircle2,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","DEPUTY_HEADTEACHER","TEACHER","CLASS_TEACHER","PARENT","STUDENT","EXAMINATION_OFFICER"]},
+  {label:"Timetable",icon:CalendarDays,group:"Academics",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","DEPUTY_HEADTEACHER","TEACHER","CLASS_TEACHER","PARENT","STUDENT","EXAMINATION_OFFICER"]},
+  {label:"Staff",icon:Users,group:"People",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","DEPUTY_HEADTEACHER","HR_MANAGER"]},
   {label:"Fees & payments",icon:Wallet,group:"Finance",roles:["SUPER_ADMIN","SCHOOL_ADMIN","FINANCE_OFFICER","PARENT"]},
   {label:"Payroll",icon:CreditCard,group:"Finance",roles:["SUPER_ADMIN","SCHOOL_ADMIN","FINANCE_OFFICER","HR_MANAGER"]},
   {label:"Library",icon:Library,group:"Operations",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","LIBRARIAN","TEACHER","CLASS_TEACHER","STUDENT"]},
@@ -34,7 +34,7 @@ const modules: ModuleItem[] = [
   {label:"Messages",icon:MessageSquare,group:"Communication",roles},
   {label:"School calendar",icon:CalendarDays,group:"Communication",roles},
   {label:"Reports & analytics",icon:Activity,group:"Insights",roles:["SUPER_ADMIN","SCHOOL_ADMIN","HEADTEACHER","DEPUTY_HEADTEACHER","FINANCE_OFFICER","HR_MANAGER"]},
-  {label:"User access",icon:ShieldCheck,group:"Administration",roles:["SUPER_ADMIN","SCHOOL_ADMIN"]},
+  {label:"User access",icon:ShieldCheck,group:"Administration",roles:["SUPER_ADMIN","SCHOOL_ADMIN","ICT_ADMIN"]},
   {label:"Settings",icon:Settings,group:"Administration",roles:["SUPER_ADMIN","SCHOOL_ADMIN"]},
 ];
 
