@@ -695,8 +695,12 @@ class SupabaseSyncRepository(
             if (!response.isSuccessful) {
                 Result.failure(IllegalStateException(formatHttpError("GSMS AI", response.code(), response.errorBody())))
             } else {
-                response.body()?.text?.takeIf { it.isNotBlank() }?.let(Result.Companion::success)
-                    ?: Result.failure(IllegalStateException(response.body()?.error ?: "GSMS AI returned an empty response."))
+                val generatedText = response.body()?.text?.takeIf { it.isNotBlank() }
+                if (generatedText != null) {
+                    Result.success(generatedText)
+                } else {
+                    Result.failure(IllegalStateException(response.body()?.error ?: "GSMS AI returned an empty response."))
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Supabase AI request failed: ${e.javaClass.simpleName}")
