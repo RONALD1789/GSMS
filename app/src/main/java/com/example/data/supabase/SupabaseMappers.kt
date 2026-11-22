@@ -126,6 +126,7 @@ fun SbAttendanceRow.toDomain(): AttendanceRecord = AttendanceRecord(
     ownerId = ownerId,
     targetType = targetType,
     targetName = targetName,
+    studentId = studentId,
     className = className,
     dateIso = dateIso,
     status = status
