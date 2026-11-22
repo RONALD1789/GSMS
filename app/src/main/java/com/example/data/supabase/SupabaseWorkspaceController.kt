@@ -221,16 +221,22 @@ class SupabaseWorkspaceController(
         extraPermissions: List<String>,
         actorName: String
     ): Result<String> {
-        val mainBranchId = currentWorkspace()
-            ?.takeIf { it.activeSchool?.id == schoolId }
-            ?.branches
-            ?.firstOrNull { it.mainCampus }
-            ?.id
-            ?: "branch_main"
+        val activeWorkspace = currentWorkspace()?.takeIf { it.activeSchool?.id == schoolId }
+        val mainBranchId = activeWorkspace?.branches?.firstOrNull { it.mainCampus }?.id ?: "branch_main"
+        val linkedStudentBranches = if (primaryRole == PortalRole.PARENT || primaryRole == PortalRole.STUDENT) {
+            activeWorkspace?.students
+                ?.filter { it.id in linkedStudentIds }
+                ?.map { it.branchId }
+                .orEmpty()
+                .filter { it.isNotBlank() }
+        } else {
+            emptyList()
+        }
+        val assignedBranchIds = linkedStudentBranches.distinct().ifEmpty { listOf(mainBranchId) }
         val item = UserAccessAssignment(
             id = newId("assign"), schoolId = schoolId, ownerId = userId,
             fullName = fullName.trim(), email = email.trim(), primaryRole = primaryRole.name,
-            assignedBranchIds = listOf(mainBranchId), assignedClasses = assignedClasses,
+            assignedBranchIds = assignedBranchIds, assignedClasses = assignedClasses,
             assignedSubjects = assignedSubjects, linkedStudentIds = linkedStudentIds,
             extraPermissions = extraPermissions, active = true, updatedBy = actorName
         )
