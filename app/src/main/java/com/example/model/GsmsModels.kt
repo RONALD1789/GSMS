@@ -280,7 +280,8 @@ data class CommunicationItem(
     val senderRole: String = "",
     val aiDrafted: Boolean = false,
     val createdAt: String? = null,
-    val updatedAt: String? = null
+    val updatedAt: String? = null,
+    val targetClass: String? = null
 )
 
 @Keep
