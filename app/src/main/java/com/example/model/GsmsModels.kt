@@ -175,6 +175,7 @@ data class AttendanceRecord(
     val ownerId: String = "",
     val targetType: String = "STUDENT",
     val targetName: String = "",
+    val studentId: String? = null,
     val className: String? = null,
     val dateIso: String = "2026-11-21",
     val status: String = "PRESENT",
