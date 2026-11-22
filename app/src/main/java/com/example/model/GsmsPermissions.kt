@@ -629,7 +629,7 @@ val RoleCapability.category: String
         RoleCapability.VIEW_ALL_REPORT_CARDS, RoleCapability.VIEW_OWN_PUBLISHED_REPORTS,
         RoleCapability.FILL_SUBMIT_REPORT_CARDS, RoleCapability.APPROVE_PUBLISH_REPORT_CARDS,
         RoleCapability.VIEW_REPORT_TEMPLATES, RoleCapability.MANAGE_REPORT_TEMPLATES -> "Academics & Reports"
-        RoleCapability.VIEW_ALL_STUDENTS, RoleCapability.ENROLL_STUDENT,
+        RoleCapability.VIEW_ALL_STUDENTS, RoleCapability.VIEW_ASSIGNED_STUDENTS, RoleCapability.ENROLL_STUDENT,
         RoleCapability.VIEW_STAFF_DIRECTORY, RoleCapability.VIEW_LEAVE_WORKFLOW,
         RoleCapability.APPLY_LEAVE, RoleCapability.APPROVE_LEAVE -> "People & HR"
         RoleCapability.VIEW_FINANCE_ALL, RoleCapability.VIEW_PAYROLL_ONLY,
