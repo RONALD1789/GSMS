@@ -399,7 +399,6 @@ object RolePolicy {
         section: String,
         extra: Set<RoleCapability> = emptySet()
     ): Boolean {
-        val privileged = role == PortalRole.SCHOOL_ADMIN || role == PortalRole.HEADTEACHER
         val capability = when (section) {
             "Procurement" -> RoleCapability.MANAGE_PROCUREMENT
             "Stores", "Assets" -> RoleCapability.MANAGE_INVENTORY
@@ -445,16 +444,6 @@ object RolePolicy {
 
 
     fun baseCapabilities(role: PortalRole): Set<RoleCapability> = capabilitiesByRole[role].orEmpty()
-
-    fun operationSections(role: PortalRole, school: School?, extra: Set<RoleCapability>): List<String> {
-        val sections = operationSections(role, school).toMutableList()
-        if (school == null) return emptyList()
-        if (RoleCapability.MANAGE_PROCUREMENT in extra && school.hasModule(GsmsModule.PROCUREMENT) && "Procurement" !in sections) sections.add("Procurement")
-        if (RoleCapability.MANAGE_INVENTORY in extra && school.hasModule(GsmsModule.INVENTORY_ASSETS) && "Stores" !in sections) sections.add("Stores")
-        if (RoleCapability.MANAGE_ICT in extra && school.hasModule(GsmsModule.ICT_SYSTEMS) && "ICT Systems" !in sections) sections.add("ICT Systems")
-        if (RoleCapability.MODERATE_EXAMS in extra && school.hasModule(GsmsModule.EXAMS) && "Examinations" !in sections) sections.add("Examinations")
-        return sections
-    }
 
     fun analyticsSubTabs(role: PortalRole, school: School?, extra: Set<RoleCapability>): List<String> =
         analyticsSubTabs(role, school).let { tabs ->
