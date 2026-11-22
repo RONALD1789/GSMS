@@ -50,7 +50,9 @@ enum class RoleCapability {
     SWITCH_SCHOOL_TENANT,
     SWITCH_BRANCH,
     MANAGE_MODULES,
-    UPDATE_ACADEMIC_PERIOD
+    UPDATE_ACADEMIC_PERIOD,
+    MANAGE_BRANCHES,
+    MANAGE_USER_PERMISSIONS
 }
 
 object RolePolicy {
@@ -74,7 +76,9 @@ object RolePolicy {
             RoleCapability.SWITCH_SCHOOL_TENANT,
             RoleCapability.SWITCH_BRANCH,
             RoleCapability.MANAGE_MODULES,
-            RoleCapability.UPDATE_ACADEMIC_PERIOD
+            RoleCapability.UPDATE_ACADEMIC_PERIOD,
+            RoleCapability.MANAGE_BRANCHES,
+            RoleCapability.MANAGE_USER_PERMISSIONS
         ),
         PortalRole.SCHOOL_ADMIN to setOf(
             RoleCapability.VIEW_ACADEMICS,
@@ -104,7 +108,9 @@ object RolePolicy {
             RoleCapability.SWITCH_SCHOOL_TENANT,
             RoleCapability.SWITCH_BRANCH,
             RoleCapability.MANAGE_MODULES,
-            RoleCapability.UPDATE_ACADEMIC_PERIOD
+            RoleCapability.UPDATE_ACADEMIC_PERIOD,
+            RoleCapability.MANAGE_BRANCHES,
+            RoleCapability.MANAGE_USER_PERMISSIONS
         ),
         PortalRole.HEADTEACHER to setOf(
             RoleCapability.VIEW_ACADEMICS,
@@ -294,6 +300,7 @@ object RolePolicy {
             PortalRole.ADMISSIONS_RECEPTION -> setOf("Admissions", "Events")
             PortalRole.TEACHER,
             PortalRole.STUDENT -> emptySet()
+            else -> emptySet()
         }
         return buildList {
             if ("Finance" in allowedByRole && school.hasModule(GsmsModule.FINANCE)) add("Finance")
@@ -334,6 +341,41 @@ object RolePolicy {
             if (analyticsSubTabs(role, school).isNotEmpty()) add(GsmsTab.ANALYTICS)
             add(GsmsTab.AI_GOVERNANCE)
         }
+    }
+
+
+    fun baseCapabilities(role: PortalRole): Set<RoleCapability> = capabilitiesByRole[role].orEmpty()
+
+    fun analyticsSubTabs(role: PortalRole, school: School?, extra: Set<RoleCapability>): List<String> =
+        analyticsSubTabs(role, school).let { tabs ->
+            if (RoleCapability.VIEW_ANALYTICS_CHARTS in extra && school?.hasModule(GsmsModule.ANALYTICS) == true && "Analytics & Alerts" !in tabs) {
+                listOf("Analytics & Alerts") + tabs
+            } else if (RoleCapability.VIEW_COMMUNICATIONS in extra && school?.hasModule(GsmsModule.COMMUNICATION) == true && "Communications" !in tabs) {
+                tabs + "Communications"
+            } else tabs
+        }
+
+    fun visibleTabs(role: PortalRole, school: School?, extra: Set<RoleCapability>): List<GsmsTab> =
+        buildList {
+            add(GsmsTab.DASHBOARD)
+            if (academicSubTabs(role, school).isNotEmpty() || RoleCapability.VIEW_ACADEMICS in extra) add(GsmsTab.ACADEMICS)
+            if (peopleSubTabs(role, school).isNotEmpty() || RoleCapability.VIEW_ALL_STUDENTS in extra || RoleCapability.VIEW_STAFF_DIRECTORY in extra) add(GsmsTab.PEOPLE)
+            if (operationSections(role, school).isNotEmpty() || RoleCapability.EDIT_OPERATIONS in extra || RoleCapability.VIEW_FINANCE_ALL in extra) add(GsmsTab.OPERATIONS)
+            if (analyticsSubTabs(role, school, extra).isNotEmpty()) add(GsmsTab.ANALYTICS)
+            add(GsmsTab.AI_GOVERNANCE)
+        }
+
+    fun filterStudentsForRole(
+        role: PortalRole,
+        students: List<Student>,
+        assignedClasses: List<String>,
+        linkedStudentIds: List<String>
+    ): List<Student> = when {
+        role == PortalRole.PARENT || role == PortalRole.STUDENT ->
+            students.filter { it.id in linkedStudentIds }
+        assignedClasses.isNotEmpty() && !has(role, RoleCapability.VIEW_ALL_STUDENTS) ->
+            students.filter { it.className in assignedClasses }
+        else -> students
     }
 
     fun filterAlertsForRole(role: PortalRole, alerts: List<EarlyWarningAlert>): List<EarlyWarningAlert> {
@@ -425,8 +467,33 @@ object RolePolicy {
             PortalRole.HR_MANAGER -> "Staff directory, leave conflict checks, leave approvals, payroll view & staffing alerts."
             PortalRole.WELFARE_NURSE -> "Student health/welfare cases, discipline & hostel logs, attendance wellness alerts & parent outreach."
             PortalRole.ADMISSIONS_RECEPTION -> "Student enrollment, admissions pipeline, campus events & prospective parent outreach."
+            else -> "${role.shortTitle} access is limited to assigned modules and records."
         }
     }
 }
 
 fun PortalRole.has(capability: RoleCapability): Boolean = RolePolicy.has(this, capability)
+fun PortalRole.has(capability: RoleCapability, extra: Set<RoleCapability>): Boolean =
+    RolePolicy.has(this, capability) || capability in extra
+
+val RoleCapability.label: String
+    get() = name.lowercase().split('_').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+
+val RoleCapability.category: String
+    get() = when (this) {
+        RoleCapability.VIEW_ACADEMICS, RoleCapability.EDIT_ACADEMICS,
+        RoleCapability.VIEW_ATTENDANCE, RoleCapability.MARK_ATTENDANCE,
+        RoleCapability.VIEW_ALL_REPORT_CARDS, RoleCapability.VIEW_OWN_PUBLISHED_REPORTS,
+        RoleCapability.FILL_SUBMIT_REPORT_CARDS, RoleCapability.APPROVE_PUBLISH_REPORT_CARDS,
+        RoleCapability.VIEW_REPORT_TEMPLATES, RoleCapability.MANAGE_REPORT_TEMPLATES -> "Academics & Reports"
+        RoleCapability.VIEW_ALL_STUDENTS, RoleCapability.ENROLL_STUDENT,
+        RoleCapability.VIEW_STAFF_DIRECTORY, RoleCapability.VIEW_LEAVE_WORKFLOW,
+        RoleCapability.APPLY_LEAVE, RoleCapability.APPROVE_LEAVE -> "People & HR"
+        RoleCapability.VIEW_FINANCE_ALL, RoleCapability.VIEW_PAYROLL_ONLY,
+        RoleCapability.VIEW_OWN_INVOICES_ONLY, RoleCapability.RECORD_FINANCE_PAYMENT,
+        RoleCapability.EDIT_OPERATIONS -> "Operations & Finance"
+        RoleCapability.VIEW_ANALYTICS_CHARTS, RoleCapability.VIEW_ALERTS,
+        RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_COMMUNICATIONS,
+        RoleCapability.COMPOSE_COMMUNICATIONS, RoleCapability.VIEW_AUDIT_LOGS -> "Analytics & Communications"
+        else -> "Governance"
+    }
