@@ -81,7 +81,8 @@ export default function App() {
       const list=(data||[]) as Assignment[];
       setAssignments(list);
       const metadataRole=String(session.user.app_metadata?.role || session.user.user_metadata?.role || "").toUpperCase();
-      const rawRole=list[0]?.primary_role ? String(list[0].primary_role).toUpperCase() : metadataRole;\n      const nextRole=rawRole==="ACCOUNTANT"?"FINANCE_OFFICER":rawRole;
+      const rawRole=list[0]?.primary_role ? String(list[0].primary_role).toUpperCase() : metadataRole;
+      const nextRole=rawRole==="ACCOUNTANT"?"FINANCE_OFFICER":rawRole;
       setActiveRole(roles.includes(nextRole)?nextRole:(nextRole || ""));
       const schoolResult=await supabase.from("gsms_school_summaries").select("*");
       if(cancelled)return;
