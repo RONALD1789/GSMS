@@ -575,7 +575,8 @@ revoke all on function public.gsms_can_access_branch(text, text) from public, an
 revoke all on function public.gsms_can_access_class_in_branch(text, text, text) from public, anon;
 revoke all on function public.gsms_can_access_student_in_branch(text, text, text, text) from public, anon;
 revoke all on function public.gsms_can_access_student(text, text, text) from public, anon;
-revoke all on function public.gsms_parent_can_access_student(text, text) from public, anon, authenticated;
+revoke all on function public.gsms_parent_can_access_student(text, text) from public, anon;
+grant execute on function public.gsms_parent_can_access_student(text, text) to authenticated;
 revoke all on function public.gsms_can_read_report(text, text, text, text) from public, anon;
 revoke all on function public.gsms_current_actor_matches(text, text, text) from public, anon;
 revoke all on function public.gsms_can_manage_assignments(text) from public, anon;
@@ -831,12 +832,46 @@ create policy "gsms_academics_manager_delete" on public.gsms_academic_records
 for delete to authenticated
 using (public.gsms_is_school_manager(school_id));
 
--- ATTENDANCE: assigned branch/class access only. No student_id foreign key exists yet,
--- so parent/student attendance access is deliberately withheld rather than matching names.
+-- ATTENDANCE: stable student IDs support parent/learner access to linked attendance only.
+alter table public.gsms_attendance
+  add column if not exists student_id text references public.gsms_students(id) on delete set null;
+
+-- Backfill only unambiguous name matches; ambiguous duplicate names remain unlinked for manual review.
+update public.gsms_attendance a
+set student_id = (
+  select min(s.id)
+  from public.gsms_students s
+  where s.school_id = a.school_id
+    and s.branch_id = a.branch_id
+    and lower(s.full_name) = lower(a.target_name)
+    and (a.class_name is null or lower(s.class_name) = lower(a.class_name))
+)
+where a.student_id is null
+  and upper(a.target_type) = 'STUDENT'
+  and (
+    select count(*)
+    from public.gsms_students s
+    where s.school_id = a.school_id
+      and s.branch_id = a.branch_id
+      and lower(s.full_name) = lower(a.target_name)
+      and (a.class_name is null or lower(s.class_name) = lower(a.class_name))
+  ) = 1;
+
+create index if not exists idx_gsms_attendance_student_scope
+  on public.gsms_attendance(school_id, student_id, date_iso)
+  where student_id is not null;
 drop policy if exists "gsms_attendance_tenant_isolation" on public.gsms_attendance;
 create policy "gsms_attendance_scoped_select" on public.gsms_attendance
 for select to authenticated
-using (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name));
+using (
+  public.gsms_can_access_class_in_branch(school_id, branch_id, class_name)
+  or (
+    upper(target_type) = 'STUDENT'
+    and student_id is not null
+    and public.gsms_parent_can_access_student(school_id, student_id)
+    and public.gsms_can_access_branch(school_id, branch_id)
+  )
+);
 create policy "gsms_attendance_scoped_insert" on public.gsms_attendance
 for insert to authenticated
 with check (public.gsms_can_access_class_in_branch(school_id, branch_id, class_name));
