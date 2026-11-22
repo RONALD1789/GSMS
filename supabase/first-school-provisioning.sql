@@ -21,6 +21,21 @@ begin
     raise exception 'Replace the school name and school code placeholders before running.';
   end if;
 
+  if exists (
+    select 1 from public.gsms_schools s
+    where s.supabase_owner_uid = v_owner_uid
+       or s.owner_id = v_owner_uid::text
+  ) then
+    raise exception 'This Auth user already owns a GSMS school. Do not run first-school provisioning again.';
+  end if;
+
+  if exists (
+    select 1 from public.gsms_schools s
+    where lower(s.code) = lower(v_school_code)
+  ) then
+    raise exception 'That school code is already in use. Choose a unique code.';
+  end if;
+
   insert into public.gsms_schools (
     id,
     owner_id,
