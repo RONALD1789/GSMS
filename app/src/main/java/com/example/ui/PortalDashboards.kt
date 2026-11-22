@@ -33,7 +33,7 @@ fun PortalDashboardScreen(
     val school = workspace.activeSchool
     val lowData = workspace.userProfile?.lowDataMode == true
     val aiEnabled = school?.hasModule(GsmsModule.AI_TOOLS) != false
-    val visibleTabs = RolePolicy.visibleTabs(role, school)
+    val visibleTabs = RolePolicy.visibleTabs(role, school, workspace.activeExtraCapabilities)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -506,6 +506,7 @@ fun PortalDashboardScreen(
                     }
                 }
             }
+
         }
     }
 }
