@@ -144,7 +144,6 @@ export default function App() {
   </main>;
 
   const role=activeRole || "UNASSIGNED";
-  const pageModule=modules.find(m=>m.label===activePage);
   return <div className="app-shell">
     {mobileOpen&&<button className="mobile-scrim" aria-label="Close menu" onClick={()=>setMobileOpen(false)}/>}
     <aside className={`sidebar ${mobileOpen?"sidebar-open":""}`}>
@@ -201,7 +200,7 @@ function ModuleWorkspace({page,schoolId,role,onBack}:{page:string;schoolId:strin
   const base=moduleConfigs[page];
   const config=page==="Students"&&["PARENT","STUDENT"].includes(role)?parentStudents:base;
   const [rows,setRows]=useState<ModuleRow[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState("");const [search,setSearch]=useState("");const [refresh,setRefresh]=useState(0);const [pageNo,setPageNo]=useState(0);const pageSize=12;
-  useEffect(()=>{let live=true;async function load(){if(!supabase||!config||!schoolId){setRows([]);setLoading(false);return;}setLoading(true);setError("");let query=supabase.from(config.table).select(config.columns.map(col=>col.key).join(",")).eq(config.schoolKey||"school_id",schoolId).limit(100);if(config.filter){if("values" in config.filter)query=query.in(config.filter.key,config.filter.values);else query=query.eq(config.filter.key,config.filter.value);}const result=await query;if(!live)return;if(result.error){setError(result.error.message);setRows([]);}else setRows((result.data||[]) as ModuleRow[]);setLoading(false);}load();return()=>{live=false;};},[page,schoolId,refresh,role]);
+  useEffect(()=>{let live=true;async function load(){if(!supabase||!config||!schoolId){setRows([]);setLoading(false);return;}setLoading(true);setError("");let query=supabase.from(config.table).select(config.columns.map(col=>col.key).join(",")).eq(config.schoolKey||"school_id",schoolId).limit(100);if(config.filter){if("values" in config.filter)query=query.in(config.filter.key,config.filter.values);else query=query.eq(config.filter.key,config.filter.value);}const result=await query;if(!live)return;if(result.error){setError(result.error.message);setRows([]);}else setRows((result.data||[]) as unknown as ModuleRow[]);setLoading(false);}load();return()=>{live=false;};},[page,schoolId,refresh,role]);
   const filtered=useMemo(()=>{const q=search.trim().toLowerCase();return q?rows.filter(row=>Object.values(row).some(value=>String(value??"").toLowerCase().includes(q))):rows;},[rows,search]);const pages=Math.max(1,Math.ceil(filtered.length/pageSize));const shown=filtered.slice(pageNo*pageSize,(pageNo+1)*pageSize);
   useEffect(()=>setPageNo(0),[search,page]);
   if(!config)return <section className="module-page"><div className="module-page-icon"><ShieldCheck size={25}/></div><span className="eyebrow dark">WORKSPACE</span><h1>{page}</h1><p className="module-intro">This area is being prepared for the next GSMS feature release.</p><button className="secondary-btn" onClick={onBack}>← Back to overview</button></section>;
