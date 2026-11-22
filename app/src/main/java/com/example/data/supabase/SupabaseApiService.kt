@@ -44,6 +44,11 @@ interface SupabaseApiService {
     @GET("rest/v1/")
     suspend fun pingPostgrest(): Response<ResponseBody>
 
+    @POST("functions/v1/gsms-ai")
+    suspend fun invokeGsmsAi(
+        @Body body: SupabaseAiRequest
+    ): Response<SupabaseAiResponse>
+
     // --- Upserts (Merge Duplicates) ---
 
     @Headers("Prefer: resolution=merge-duplicates,return=minimal")
