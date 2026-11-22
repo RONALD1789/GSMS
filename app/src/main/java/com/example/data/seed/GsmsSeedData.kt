@@ -1,4 +1,4 @@
-package com.example.data
+package com.example.data.seed
 
 import com.example.model.GsmsModule
 import com.example.model.PortalRole

@@ -1,31 +1,26 @@
 package com.example.data
 
 import android.content.Context
-import com.example.R
+import com.example.data.firebase.FirestoreProvider
+import com.example.data.seed.GsmsSeedData
 import com.example.model.*
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
-import com.google.firebase.firestore.DocumentSnapshot.ServerTimestampBehavior
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.PersistentCacheSettings
-import com.google.firebase.firestore.firestoreSettings
-import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
 class GsmsRepository(private val db: FirebaseFirestore) {
 
     constructor(context: Context) : this(
-        createConfiguredFirestore(context.applicationContext)
+        FirestoreProvider.create(context.applicationContext)
     )
 
     private val auth = Firebase.auth
+    private val streams = SchoolStreamsRepository(db)
+    private val auditLogs = AuditLogRepository(db)
 
     private fun requireUserId(): String {
         return auth.currentUser?.uid
@@ -102,96 +97,22 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         }
     }
 
-    fun observeUserProfile(uid: String): Flow<UserProfile?> =
-        db.collection("users").document(uid)
-            .snapshots()
-            .map { it.toObject(UserProfile::class.java, ServerTimestampBehavior.ESTIMATE) }
-            .catch { error -> handleStreamError(error, OperationType.GET, "users/$uid", uid) }
-
-    fun observeSchools(uid: String): Flow<List<School>> =
-        db.collection("schools")
-            .whereEqualTo("ownerId", uid)
-            .snapshots()
-            .map { snap -> snap.toObjects(School::class.java, ServerTimestampBehavior.ESTIMATE) }
-            .catch { error -> handleStreamError(error, OperationType.LIST, "schools", uid) }
-
-    fun observeAccessAssignments(uid: String, schoolId: String): Flow<List<UserAccessAssignment>> =
-        observeSchoolCollection(uid, schoolId, "access_assignments", UserAccessAssignment::class.java)
-
-    fun observeBranches(uid: String, schoolId: String): Flow<List<Branch>> =
-        observeSchoolCollection(uid, schoolId, "branches", Branch::class.java)
-
-    fun observeStudents(uid: String, schoolId: String): Flow<List<Student>> =
-        observeSchoolCollection(uid, schoolId, "students", Student::class.java)
-
-    fun observeStaff(uid: String, schoolId: String): Flow<List<StaffMember>> =
-        observeSchoolCollection(uid, schoolId, "staff", StaffMember::class.java)
-
-    fun observeAcademics(uid: String, schoolId: String): Flow<List<AcademicRecord>> =
-        observeSchoolCollection(uid, schoolId, "academics", AcademicRecord::class.java)
-
-    fun observeAttendance(uid: String, schoolId: String): Flow<List<AttendanceRecord>> =
-        observeSchoolCollection(uid, schoolId, "attendance", AttendanceRecord::class.java)
-
-    fun observeReportTemplates(uid: String, schoolId: String): Flow<List<ReportTemplate>> =
-        observeSchoolCollection(uid, schoolId, "report_templates", ReportTemplate::class.java)
-
-    fun observeReportCards(uid: String, schoolId: String): Flow<List<ReportCard>> =
-        observeSchoolCollection(uid, schoolId, "report_cards", ReportCard::class.java)
-
-    fun observeFinance(uid: String, schoolId: String): Flow<List<FinanceEntry>> =
-        observeSchoolCollection(uid, schoolId, "finance", FinanceEntry::class.java)
-
-    fun observeLeaveRequests(uid: String, schoolId: String): Flow<List<LeaveRequest>> =
-        observeSchoolCollection(uid, schoolId, "leave_requests", LeaveRequest::class.java)
-
-    fun observeCommunications(uid: String, schoolId: String): Flow<List<CommunicationItem>> =
-        observeSchoolCollection(uid, schoolId, "communications", CommunicationItem::class.java)
-
-    fun observeOperations(uid: String, schoolId: String): Flow<List<OperationRecord>> =
-        observeSchoolCollection(uid, schoolId, "operations", OperationRecord::class.java)
-
-    fun observeAlerts(uid: String, schoolId: String): Flow<List<EarlyWarningAlert>> =
-        observeSchoolCollection(uid, schoolId, "alerts", EarlyWarningAlert::class.java)
-
-    fun observeAuditLogs(uid: String, schoolId: String): Flow<List<AuditLog>> =
-        observeSchoolCollection(uid, schoolId, "audit_logs", AuditLog::class.java)
-
-    private fun <T> observeSchoolCollection(
-        uid: String,
-        schoolId: String,
-        collectionName: String,
-        clazz: Class<T>
-    ): Flow<List<T>> = flow {
-        if (schoolId.isBlank()) {
-            emit(emptyList())
-            return@flow
-        }
-        val path = "schools/$schoolId/$collectionName"
-        db.collection("schools").document(schoolId).collection(collectionName)
-            .whereEqualTo("ownerId", uid)
-            .snapshots()
-            .map { snap -> snap.toObjects(clazz, ServerTimestampBehavior.ESTIMATE) }
-            .catch { error -> handleStreamError(error, OperationType.LIST, path, uid) }
-            .collect { emit(it) }
-    }
-
-    private fun handleStreamError(
-        error: Throwable,
-        op: OperationType,
-        path: String,
-        uid: String
-    ): Nothing {
-        val firestoreError = generateSequence(error) { it.cause }
-            .filterIsInstance<FirebaseFirestoreException>()
-            .firstOrNull()
-        if (firestoreError == null && error is CancellationException) throw error
-        val exceptionToLog = firestoreError ?: (error as? Exception)
-        if (exceptionToLog != null && auth.currentUser?.uid == uid) {
-            handleFirestoreError(exceptionToLog, op, path)
-        }
-        throw error
-    }
+    fun observeUserProfile(uid: String): Flow<UserProfile?> = streams.observeUserProfile(uid)
+    fun observeSchools(uid: String): Flow<List<School>> = streams.observeSchools(uid)
+    fun observeAccessAssignments(uid: String, schoolId: String): Flow<List<UserAccessAssignment>> = streams.observeAccessAssignments(uid, schoolId)
+    fun observeBranches(uid: String, schoolId: String): Flow<List<Branch>> = streams.observeBranches(uid, schoolId)
+    fun observeStudents(uid: String, schoolId: String): Flow<List<Student>> = streams.observeStudents(uid, schoolId)
+    fun observeStaff(uid: String, schoolId: String): Flow<List<StaffMember>> = streams.observeStaff(uid, schoolId)
+    fun observeAcademics(uid: String, schoolId: String): Flow<List<AcademicRecord>> = streams.observeAcademics(uid, schoolId)
+    fun observeAttendance(uid: String, schoolId: String): Flow<List<AttendanceRecord>> = streams.observeAttendance(uid, schoolId)
+    fun observeReportTemplates(uid: String, schoolId: String): Flow<List<ReportTemplate>> = streams.observeReportTemplates(uid, schoolId)
+    fun observeReportCards(uid: String, schoolId: String): Flow<List<ReportCard>> = streams.observeReportCards(uid, schoolId)
+    fun observeFinance(uid: String, schoolId: String): Flow<List<FinanceEntry>> = streams.observeFinance(uid, schoolId)
+    fun observeLeaveRequests(uid: String, schoolId: String): Flow<List<LeaveRequest>> = streams.observeLeaveRequests(uid, schoolId)
+    fun observeCommunications(uid: String, schoolId: String): Flow<List<CommunicationItem>> = streams.observeCommunications(uid, schoolId)
+    fun observeOperations(uid: String, schoolId: String): Flow<List<OperationRecord>> = streams.observeOperations(uid, schoolId)
+    fun observeAlerts(uid: String, schoolId: String): Flow<List<EarlyWarningAlert>> = streams.observeAlerts(uid, schoolId)
+    fun observeAuditLogs(uid: String, schoolId: String): Flow<List<AuditLog>> = streams.observeAuditLogs(uid, schoolId)
 
     // --- USER & TENANT GOVERNANCE MUTATIONS ---
 
@@ -1116,34 +1037,5 @@ class GsmsRepository(private val db: FirebaseFirestore) {
         moduleName: String,
         summary: String,
         aiAction: Boolean
-    ) {
-        db.collection("schools").document(schoolId).collection("audit_logs").document().set(
-            mapOf(
-                "schoolId" to schoolId,
-                "ownerId" to uid,
-                "actorName" to actorName.ifBlank { "GSMS User" }.take(100),
-                "actorRole" to actorRole.take(60),
-                "actionType" to actionType.take(60),
-                "moduleName" to moduleName.take(60),
-                "summary" to summary.take(400),
-                "aiAction" to aiAction,
-                "createdAt" to FieldValue.serverTimestamp()
-            )
-        ).await()
-    }
-
-    companion object {
-        private fun createConfiguredFirestore(appContext: Context): FirebaseFirestore {
-            val databaseId = appContext.getString(R.string.firestore_database_id)
-            val instance = FirebaseFirestore.getInstance(databaseId)
-            try {
-                instance.firestoreSettings = firestoreSettings {
-                    setLocalCacheSettings(PersistentCacheSettings.newBuilder().build())
-                }
-            } catch (_: IllegalStateException) {
-                // Settings already applied on existing instance
-            }
-            return instance
-        }
-    }
+    ) = auditLogs.append(schoolId, uid, actorName, actorRole, actionType, moduleName, summary, aiAction)
 }
