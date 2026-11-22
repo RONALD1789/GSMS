@@ -145,8 +145,6 @@ object RolePolicy {
             RoleCapability.FILL_SUBMIT_REPORT_CARDS,
             RoleCapability.VIEW_REPORT_TEMPLATES,
             RoleCapability.VIEW_ASSIGNED_STUDENTS,
-            RoleCapability.VIEW_STAFF_DIRECTORY,
-            RoleCapability.VIEW_LEAVE_WORKFLOW,
             RoleCapability.APPLY_LEAVE,
             RoleCapability.VIEW_ALERTS,
             RoleCapability.MANAGE_ALERTS,
