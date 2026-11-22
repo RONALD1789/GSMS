@@ -1,5 +1,6 @@
 package com.example.data
 
+import com.example.model.*
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.DocumentSnapshot.ServerTimestampBehavior
