@@ -532,9 +532,11 @@ class SupabaseWorkspaceController(
         actionType: String,
         summary: String
     ) {
+        val resolvedActorName = currentWorkspace()?.userProfile?.displayName
+            ?.takeIf { it.isNotBlank() } ?: actorName
         val log = AuditLog(
             id = newId("aud"), schoolId = schoolId, ownerId = userId,
-            actorName = actorName, actorRole = role.name, actionType = actionType,
+            actorName = resolvedActorName, actorRole = role.name, actionType = actionType,
             moduleName = "AI_TOOLS", summary = summary, aiAction = true
         )
         supabase.appendAuditLog(log, userId, schoolId)
