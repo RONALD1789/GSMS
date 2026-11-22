@@ -59,30 +59,31 @@ Also create a second branch A2, a second class P6, and a second student S2.
 2. Teacher can read only their own staff profile and leave requests; they cannot read another employee's profile, leave requests or access assignment, nor finance records.
 3. Teacher cannot update an APPROVED/PUBLISHED report or set a report status to APPROVED/PUBLISHED.
 4. Parent cannot select another student's records or any report that is not APPROVED/PUBLISHED.
-5. Parent/student communication reads must be limited to rows whose audience explicitly includes their portal audience or ALL.
-6. Non-owner school summaries must mask owner IDs, subscription details, revenue and churn metrics.
-7. Parent can read attendance only when the row has a stable student_id matching one of their linked students. Backfill must update only unambiguous name matches; ambiguous legacy rows remain unavailable until manually linked.
-8. Finance Officer cannot read student medical/welfare alerts or HR records.
-9. No access assignment can grant SUPER_ADMIN; the verified school owner is the only account treated as the owner/Super Admin. A School Admin also cannot alter their own role by changing their assignment.
-10. A non-owner cannot append an audit record using another user's name or portal role.
-11. A member of School A cannot read or mutate any School B data.
-12. A disabled assignment (`active = false`) must immediately lose access after the next authenticated request.
-13. An unauthenticated/anonymous request must not read or mutate any tenant data.
-14. Parent attendance returns only rows whose student_id is one of the parent's linked student IDs; unlinked legacy attendance and another parent's attendance remain invisible.
-15. Teacher, Class Teacher and other staff roles can submit leave only for the authenticated user's matching staff record; they cannot submit on behalf of another staff member.
-16. Parent can read only invoices linked to their assigned student IDs; an invoice linked to another student or an unlinked invoice must remain invisible.
-17. Finance Officer can create an invoice only with a valid student_id in the same school and branch; invalid or cross-tenant student links must fail.
-18. Procurement Officer can create/update procurement records but cannot mutate Stores records; Storekeeper can mutate Stores but only read Procurement.
-19. Finance Officer can read Procurement records for oversight but cannot create/update requisitions or purchase orders unless separately delegated MANAGE_PROCUREMENT.
-20. Examination Officer can manage EXAM/EXAM_TIMETABLE/INVIGILATION/MARK_MODERATION records but cannot approve/publish report cards.
-21. School Counsellor can manage counselling/discipline records and read welfare records; Welfare Nurse can manage welfare/hostel records and read counselling/discipline records.
-22. ICT Admin can manage ICT records and provision standard staff/portal roles only; attempts to create School Admin, Headteacher, Deputy Headteacher, Finance Officer, HR Manager or SUPER_ADMIN assignments must fail.
-23. ICT Admin's access to Stores is read-only; they cannot mutate stock or asset records unless separately delegated MANAGE_INVENTORY.
+5. Parent/student communication reads must be limited to rows whose audience explicitly includes their portal audience or ALL; class-targeted messages must additionally match a linked student's class and branch.
+6. A Teacher/Class Teacher assigned to P5/A1 can send a parent notice to P5/A1 only; attempts to target P6/A2 or send a branch-wide parent notice must fail.
+7. Non-owner school summaries must mask owner IDs, subscription details, revenue and churn metrics.
+8. Parent can read attendance only when the row has a stable student_id matching one of their linked students. Backfill must update only unambiguous name matches; ambiguous legacy rows remain unavailable until manually linked.
+9. Finance Officer cannot read student medical/welfare alerts or HR records.
+10. No access assignment can grant SUPER_ADMIN; the verified school owner is the only account treated as the owner/Super Admin. A School Admin also cannot alter their own role by changing their assignment.
+11. A non-owner cannot append an audit record using another user's name or portal role.
+12. A member of School A cannot read or mutate any School B data.
+13. A disabled assignment (`active = false`) must immediately lose access after the next authenticated request.
+14. An unauthenticated/anonymous request must not read or mutate any tenant data.
+15. Parent attendance returns only rows whose student_id is one of the parent's linked student IDs; unlinked legacy attendance and another parent's attendance remain invisible.
+16. Teacher, Class Teacher and other staff roles can submit leave only for the authenticated user's matching staff record; they cannot submit on behalf of another staff member.
+17. Parent can read only invoices linked to their assigned student IDs; an invoice linked to another student or an unlinked invoice must remain invisible.
+18. Finance Officer can create an invoice only with a valid student_id in the same school and branch; invalid or cross-tenant student links must fail.
+19. Procurement Officer can create/update procurement records but cannot mutate Stores records; Storekeeper can mutate Stores but only read Procurement.
+20. Finance Officer can read Procurement records for oversight but cannot create/update requisitions or purchase orders unless separately delegated MANAGE_PROCUREMENT.
+21. Examination Officer can manage EXAM/EXAM_TIMETABLE/INVIGILATION/MARK_MODERATION records but cannot approve/publish report cards.
+22. School Counsellor can manage counselling/discipline records and read welfare records; Welfare Nurse can manage welfare/hostel records and read counselling/discipline records.
+23. ICT Admin can manage ICT records and provision standard staff/portal roles only; attempts to create School Admin, Headteacher, Deputy Headteacher, Finance Officer, HR Manager or SUPER_ADMIN assignments must fail.
+24. ICT Admin's access to Stores is read-only; they cannot mutate stock or asset records unless separately delegated MANAGE_INVENTORY.
 
 ## Remaining schema / workflow limitations
 
 - New invoices now require a stable student_id and are visible to parents only when linked to one of their assigned students. Legacy invoices are backfilled only when the guardian name uniquely identifies one learner in that branch; ambiguous invoices require a finance administrator to link them manually.
-- Communications currently has no `target_class` or recipient-student field. Parent communications remain audience- and branch-scoped; teacher-to-class-parent targeting still needs a schema/UI enhancement.
+- Class-targeted parent messaging now uses target_class and is restricted by the teacher's assigned classes and the parent's linked learners. SMS/email delivery providers and delivery receipts still require external provider configuration.
 - The current report-card status model should be validated against the app's exact workflow before production approval. Teachers are restricted to DRAFT/RETURNED rows and may submit; only leadership can approve/publish.
 - Operational module records now use role-specific labels and status workflows, but inventory quantities, purchase-order line items, exam timetables and ICT ticket SLAs still require dedicated structured fields and end-to-end operational testing.
 
