@@ -51,9 +51,10 @@ Also create a second branch A2, a second class P6, and a second student S2.
 7. Parent cannot access attendance yet: the current attendance table stores a display name but has no student ID foreign key. Do not match by name.
 8. Finance Officer cannot read student medical/welfare alerts or HR records.
 9. No access assignment can grant SUPER_ADMIN; the verified school owner is the only account treated as the owner/Super Admin. A School Admin also cannot alter their own role by changing their assignment.
-10. A member of School A cannot read or mutate any School B data.
-11. A disabled assignment (`active = false`) must immediately lose access after the next authenticated request.
-12. An unauthenticated/anonymous request must not read or mutate any tenant data.
+10. A non-owner cannot append an audit record using another user's name or portal role.
+11. A member of School A cannot read or mutate any School B data.
+12. A disabled assignment (`active = false`) must immediately lose access after the next authenticated request.
+13. An unauthenticated/anonymous request must not read or mutate any tenant data.
 
 ## Schema limitations to address separately
 
