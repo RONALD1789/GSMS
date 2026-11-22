@@ -223,6 +223,9 @@ class SupabaseWorkspaceController(
     ): Result<String> {
         val activeWorkspace = currentWorkspace()?.takeIf { it.activeSchool?.id == schoolId }
         val mainBranchId = activeWorkspace?.branches?.firstOrNull { it.mainCampus }?.id ?: "branch_main"
+        val selectedBranchId = activeWorkspace?.activeBranchId
+            ?.takeIf { selected -> activeWorkspace.branches.any { it.id == selected } }
+            ?: mainBranchId
         val linkedStudentBranches = if (primaryRole == PortalRole.PARENT || primaryRole == PortalRole.STUDENT) {
             activeWorkspace?.students
                 ?.filter { it.id in linkedStudentIds }
@@ -232,7 +235,7 @@ class SupabaseWorkspaceController(
         } else {
             emptyList()
         }
-        val assignedBranchIds = linkedStudentBranches.distinct().ifEmpty { listOf(mainBranchId) }
+        val assignedBranchIds = linkedStudentBranches.distinct().ifEmpty { listOf(selectedBranchId) }
         val item = UserAccessAssignment(
             id = newId("assign"), schoolId = schoolId, ownerId = userId,
             fullName = fullName.trim(), email = email.trim(), primaryRole = primaryRole.name,
