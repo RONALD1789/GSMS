@@ -11,6 +11,11 @@ data class SupabaseAuthRequest(
 )
 
 @Keep
+data class SupabaseRefreshRequest(
+    @Json(name = "refresh_token") val refreshToken: String
+)
+
+@Keep
 data class SupabaseUserMetadata(
     @Json(name = "full_name") val fullName: String? = null
 )
