@@ -341,6 +341,43 @@ class GsmsViewModel(
         launchMutation { workspaceController.addOperationRecord(school, branchId, moduleType, title, subtitle, partyName, status, metricLabel, notes) }
     }
 
+    fun updateOperationRecord(
+        schoolId: String,
+        operation: OperationRecord,
+        title: String,
+        subtitle: String,
+        partyName: String,
+        metricLabel: String,
+        notes: String,
+        role: PortalRole
+    ) {
+        val section = when (operation.moduleType) {
+            "LIBRARY_BOOK", "LIBRARY_BORROW" -> "Library"
+            "VEHICLE", "ROUTE", "TRIP" -> "Transport"
+            "WELFARE" -> "Welfare"
+            "DISCIPLINE" -> "Discipline"
+            "COUNSELLING", "INTERVENTION", "SAFEGUARDING" -> "Counselling"
+            "INVENTORY", "ASSET" -> "Assets"
+            "STOCK", "STOCK_ISSUE", "STOCK_RECEIPT" -> "Stores"
+            "HOSTEL" -> "Hostel"
+            "ADMISSION" -> "Admissions"
+            "FRONT_DESK" -> "Front Desk"
+            "PROCUREMENT", "REQUISITION", "PURCHASE_ORDER", "VENDOR", "RFQ" -> "Procurement"
+            "EXAM", "EXAM_TIMETABLE", "INVIGILATION", "MARK_MODERATION" -> "Examinations"
+            "ICT_TICKET", "ICT_ASSET", "SYSTEM_INCIDENT", "ACCESS_REQUEST" -> "ICT Systems"
+            else -> "Events"
+        }
+        val extra = (uiState.value as? UiState.Success)?.data
+            ?.takeIf { it.activeRole == role }?.activeExtraCapabilities.orEmpty()
+        if (!RolePolicy.canManageOperationSection(role, section, extra)) {
+            _statusBanner.value = "Access denied: ${role.shortTitle} cannot edit $section records."
+            return
+        }
+        launchMutation {
+            workspaceController.updateOperationRecord(schoolId, operation, title, subtitle, partyName, metricLabel, notes)
+        }
+    }
+
     fun updateOperationStatus(schoolId: String, operation: OperationRecord, status: String, role: PortalRole) {
         val section = when (operation.moduleType) {
             "LIBRARY_BOOK", "LIBRARY_BORROW" -> "Library"
