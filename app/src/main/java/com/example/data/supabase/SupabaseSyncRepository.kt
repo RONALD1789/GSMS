@@ -392,8 +392,9 @@ class SupabaseSyncRepository(
                         it.active && it.email.equals(session.email, ignoreCase = true)
                     }
                     val isOwner = activeSchool.ownerId == session.userId
+                    val assignedRole = matchingAssignment?.resolvedRole()
                     val students = if (
-                        !isOwner && matchingAssignment?.resolvedRole() in setOf(PortalRole.PARENT, PortalRole.STUDENT)
+                        !isOwner && (assignedRole == PortalRole.PARENT || assignedRole == PortalRole.STUDENT)
                     ) {
                         readList(
                             "gsms_parent_student_summaries",
