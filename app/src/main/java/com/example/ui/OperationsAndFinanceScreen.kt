@@ -31,12 +31,13 @@ fun OperationsAndFinanceScreen(
     } else {
         null
     }
-    val enabledSections = remember(role, school.enabledModules) {
+    val enabledSections = remember(role, school.enabledModules, workspace.activeExtraCapabilities) {
         RolePolicy.operationSections(role, school, workspace.activeExtraCapabilities)
     }
     var activeSection by remember(enabledSections) { mutableStateOf(enabledSections.firstOrNull() ?: "") }
     var paymentTarget by remember { mutableStateOf<FinanceEntry?>(null) }
     var showAddOpDialog by remember { mutableStateOf(false) }
+    var editTarget by remember { mutableStateOf<OperationRecord?>(null) }
 
     if (enabledSections.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
@@ -240,8 +241,10 @@ fun OperationsAndFinanceScreen(
                                     }
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.End
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        TextButton(onClick = { editTarget = op }) { Text("Edit") }
                                         OutlinedButton(
                                             onClick = { viewModel.updateOperationStatus(school.id, op, nextStatus, role) },
                                             modifier = Modifier.minimumInteractiveComponentSize()
@@ -286,6 +289,39 @@ fun OperationsAndFinanceScreen(
         )
     }
 
+
+    editTarget?.let { target ->
+        var title by remember(target.id) { mutableStateOf(target.title) }
+        var subtitle by remember(target.id) { mutableStateOf(target.subtitle.orEmpty()) }
+        var party by remember(target.id) { mutableStateOf(target.partyName.orEmpty()) }
+        var metric by remember(target.id) { mutableStateOf(target.metricLabel.orEmpty()) }
+        var notes by remember(target.id) { mutableStateOf(target.notes.orEmpty()) }
+        AlertDialog(
+            onDismissRequest = { editTarget = null },
+            title = { Text("Edit ${target.moduleType.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase)}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Record Title") }, singleLine = true)
+                    OutlinedTextField(value = subtitle, onValueChange = { subtitle = it }, label = { Text("Location / Class / Description") }, singleLine = true)
+                    OutlinedTextField(value = party, onValueChange = { party = it }, label = { Text("Assigned To / Supplier / Person") }, singleLine = true)
+                    OutlinedTextField(value = metric, onValueChange = { metric = it }, label = { Text("Metric / Reference") }, singleLine = true)
+                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Notes") }, minLines = 2, maxLines = 4)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (title.isNotBlank()) {
+                            viewModel.updateOperationRecord(school.id, target, title, subtitle, party, metric, notes, role)
+                            editTarget = null
+                        }
+                    }
+                ) { Text("Save Changes") }
+            },
+            dismissButton = { TextButton(onClick = { editTarget = null }) { Text("Cancel") } }
+        )
+    }
+
     if (showAddOpDialog) {
         val defaultType = when (activeSection) {
             "Library" -> "LIBRARY_BOOK"
@@ -303,28 +339,49 @@ fun OperationsAndFinanceScreen(
             "ICT", "ICT Systems" -> "ICT_TICKET"
             else -> "EVENT"
         }
+        val fieldLabels = when (activeSection) {
+            "Procurement" -> listOf("Requisition / Purchase Order", "Supplier / Requester", "PO Number / Budget", "Scope / Justification")
+            "Stores", "Assets" -> listOf("Stock Item / Asset", "Store / Location", "Quantity / Unit / Reorder Level", "Condition / Stock Notes")
+            "Examinations" -> listOf("Exam / Assessment", "Class / Subject", "Exam Date / Paper Reference", "Instructions / Moderation Notes")
+            "Counselling", "Discipline" -> listOf("Case / Intervention", "Learner / Assigned Counsellor", "Priority / Follow-up Date", "Confidential Case Notes")
+            "ICT", "ICT Systems" -> listOf("Support Ticket / Incident", "Device / Requester", "Priority / Ticket Reference", "Issue Details / Resolution Notes")
+            "Front Desk" -> listOf("Visitor / Inquiry", "Contact / Purpose", "Visit Date / Reference", "Reception Notes")
+            "Welfare" -> listOf("Clinic / Welfare Case", "Learner / Nurse", "Priority / Follow-up Date", "Care Notes")
+            "Hostel" -> listOf("Boarding Record", "Learner / House", "Room / Bed", "Boarding Notes")
+            "Transport" -> listOf("Vehicle / Route / Trip", "Driver / Assigned Staff", "Route / Mileage", "Trip / Maintenance Notes")
+            "Library" -> listOf("Book / Borrowing Record", "Borrower / Class", "Accession / Due Date", "Library Notes")
+            "Admissions" -> listOf("Applicant / Admission", "Parent / Guardian", "Application / Class", "Admission Notes")
+            else -> listOf("Record Title", "Assigned To / Person", "Metric / Reference", "Description / Notes")
+        }
         var title by remember { mutableStateOf("") }
         var subtitle by remember { mutableStateOf("") }
         var party by remember { mutableStateOf("") }
         var metric by remember { mutableStateOf("") }
         var notes by remember { mutableStateOf("") }
+        var recordStatus by remember { mutableStateOf("PENDING") }
         AlertDialog(
             onDismissRequest = { showAddOpDialog = false },
             title = { Text("Add $activeSection Record") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
-                    OutlinedTextField(value = subtitle, onValueChange = { subtitle = it }, label = { Text("Subtitle / Location") }, singleLine = true)
-                    OutlinedTextField(value = party, onValueChange = { party = it }, label = { Text("Assigned To / Person") }, singleLine = true)
-                    OutlinedTextField(value = metric, onValueChange = { metric = it }, label = { Text("Metric / Status Reference") }, singleLine = true)
-                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Description / Notes") }, minLines = 2, maxLines = 4)
+                    OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(fieldLabels[0]) }, singleLine = true)
+                    OutlinedTextField(value = subtitle, onValueChange = { subtitle = it }, label = { Text(fieldLabels[1]) }, singleLine = true)
+                    OutlinedTextField(value = party, onValueChange = { party = it }, label = { Text(fieldLabels[1]) }, singleLine = true)
+                    OutlinedTextField(value = metric, onValueChange = { metric = it }, label = { Text(fieldLabels[2]) }, singleLine = true)
+                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text(fieldLabels[3]) }, minLines = 2, maxLines = 4)
+                    Text("Workflow status", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("PENDING", "IN_PROGRESS", "COMPLETED").forEach { status ->
+                            FilterChip(selected = recordStatus == status, onClick = { recordStatus = status }, label = { Text(status.replace('_', ' ')) })
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(onClick = {
                     if (title.isNotBlank()) {
                         viewModel.addOperationRecord(
-                            school, workspace.activeBranchId, defaultType, title, subtitle, party, "ACTIVE", metric, notes, workspace.activeRole
+                            school, workspace.activeBranchId, defaultType, title, subtitle, party, recordStatus, metric, notes, workspace.activeRole
                         )
                         showAddOpDialog = false
                     }
