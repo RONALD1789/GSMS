@@ -258,7 +258,8 @@ data class SbFinanceRow(
     val category: String,
     @Json(name = "amount_usd") val amountUsd: Double,
     @Json(name = "paid_usd") val paidUsd: Double,
-    val status: String
+    val status: String,
+    @Json(name = "student_id") val studentId: String? = null
 )
 
 @Keep
@@ -500,7 +501,8 @@ fun FinanceEntry.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: String)
     category = category,
     amountUsd = amountUsd,
     paidUsd = paidUsd,
-    status = status
+    status = status,
+    studentId = studentId
 )
 
 fun LeaveRequest.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: String): SbLeaveRow = SbLeaveRow(
