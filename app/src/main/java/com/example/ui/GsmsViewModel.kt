@@ -319,10 +319,13 @@ class GsmsViewModel(
             "LIBRARY_BOOK", "LIBRARY_BORROW" -> "Library"
             "VEHICLE", "ROUTE", "TRIP" -> "Transport"
             "WELFARE" -> "Welfare"
-            "DISCIPLINE" -> "Discipline"
-            "INVENTORY", "ASSET" -> "Assets"
+            "DISCIPLINE", "COUNSELLING", "INTERVENTION", "SAFEGUARDING" -> "Counselling"
+            "INVENTORY", "ASSET", "STOCK", "STOCK_ISSUE", "STOCK_RECEIPT" -> "Stores"
             "HOSTEL" -> "Hostel"
             "ADMISSION" -> "Admissions"
+            "PROCUREMENT", "REQUISITION", "PURCHASE_ORDER", "VENDOR", "RFQ" -> "Procurement"
+            "EXAM", "EXAM_TIMETABLE", "INVIGILATION", "MARK_MODERATION" -> "Examinations"
+            "ICT_TICKET", "ICT_ASSET", "SYSTEM_INCIDENT", "ACCESS_REQUEST" -> "ICT"
             else -> "Events"
         }
         if (!requireCapability(RoleCapability.EDIT_OPERATIONS, "add $sectionName records", actorRole) ||
