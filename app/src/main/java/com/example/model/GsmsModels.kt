@@ -240,7 +240,8 @@ data class FinanceEntry(
     val paidUsd: Double = 0.0,
     val status: String = "PENDING",
     val createdAt: String? = null,
-    val updatedAt: String? = null
+    val updatedAt: String? = null,
+    val studentId: String? = null
 )
 
 @Keep
