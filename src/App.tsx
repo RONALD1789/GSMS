@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import {
-  Activity, ArrowDownRight, ArrowUpRight, Bell, BookOpen, Bus, CalendarDays,
+  Activity, Bell, BookOpen, Bus, CalendarDays,
   CheckCircle2, ChevronDown, ClipboardCheck, CreditCard, GraduationCap,
   LayoutDashboard, Library, LifeBuoy, LogOut, Menu, MessageSquare, Search,
   Settings, ShieldCheck, Sparkles, Users, Wallet, X
