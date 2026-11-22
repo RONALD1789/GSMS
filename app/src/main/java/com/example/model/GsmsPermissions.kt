@@ -24,6 +24,7 @@ enum class RoleCapability {
 
     // People & Leave
     VIEW_ALL_STUDENTS,
+    VIEW_ASSIGNED_STUDENTS,
     ENROLL_STUDENT,
     VIEW_STAFF_DIRECTORY,
     VIEW_LEAVE_WORKFLOW,
@@ -143,7 +144,7 @@ object RolePolicy {
             RoleCapability.VIEW_ALL_REPORT_CARDS,
             RoleCapability.FILL_SUBMIT_REPORT_CARDS,
             RoleCapability.VIEW_REPORT_TEMPLATES,
-            RoleCapability.VIEW_ALL_STUDENTS,
+            RoleCapability.VIEW_ASSIGNED_STUDENTS,
             RoleCapability.VIEW_STAFF_DIRECTORY,
             RoleCapability.VIEW_LEAVE_WORKFLOW,
             RoleCapability.APPLY_LEAVE,
@@ -226,7 +227,7 @@ object RolePolicy {
         PortalRole.CLASS_TEACHER to setOf(
             RoleCapability.VIEW_ACADEMICS, RoleCapability.EDIT_ACADEMICS,
             RoleCapability.VIEW_ATTENDANCE, RoleCapability.MARK_ATTENDANCE,
-            RoleCapability.FILL_SUBMIT_REPORT_CARDS, RoleCapability.VIEW_REPORT_TEMPLATES,
+            RoleCapability.FILL_SUBMIT_REPORT_CARDS, RoleCapability.VIEW_ASSIGNED_STUDENTS, RoleCapability.VIEW_REPORT_TEMPLATES,
             RoleCapability.VIEW_ALERTS, RoleCapability.MANAGE_ALERTS,
             RoleCapability.VIEW_COMMUNICATIONS, RoleCapability.COMPOSE_COMMUNICATIONS
         ),
@@ -313,8 +314,8 @@ object RolePolicy {
     fun peopleSubTabs(role: PortalRole, school: School?): List<String> {
         if (school == null) return emptyList()
         return buildList {
-            if (has(role, RoleCapability.VIEW_ALL_STUDENTS)) {
-                add("Students")
+            if (has(role, RoleCapability.VIEW_ALL_STUDENTS) || has(role, RoleCapability.VIEW_ASSIGNED_STUDENTS)) {
+                add(if (has(role, RoleCapability.VIEW_ALL_STUDENTS)) "Students" else "My Assigned Students")
             }
             if (has(role, RoleCapability.VIEW_STAFF_DIRECTORY) && school.hasModule(GsmsModule.HR_STAFF)) {
                 add("Staff & Faculty")
@@ -335,7 +336,7 @@ object RolePolicy {
             )
             PortalRole.HEADTEACHER,
             PortalRole.DEPUTY_HEADTEACHER -> setOf("Welfare", "Discipline", "Admissions", "Events")
-            PortalRole.CLASS_TEACHER -> setOf("Welfare", "Discipline")
+            PortalRole.CLASS_TEACHER -> emptySet()
             PortalRole.PROCUREMENT_OFFICER -> setOf("Procurement")
             PortalRole.STOREKEEPER -> setOf("Stores")
             PortalRole.EXAMINATION_OFFICER -> setOf("Examinations")
