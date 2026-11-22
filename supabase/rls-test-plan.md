@@ -13,7 +13,9 @@ Create two school tenants (School A and School B) with distinct owners. In Schoo
 - one Parent linked to Student S1;
 - one Finance Officer assigned to Branch A1;
 - one HR Manager assigned to Branch A1;
-- one Librarian assigned to Branch A1.
+- one Librarian assigned to Branch A1;
+- one Deputy Headteacher, Class Teacher, Procurement Officer, Storekeeper, Examination Officer, School Counsellor, Welfare Nurse, Admissions Receptionist and ICT Admin, each assigned to Branch A1;
+- staff directory rows whose full names match their authenticated access assignments.
 
 Also create a second branch A2, a second class P6, and a second student S2.
 
@@ -28,7 +30,16 @@ Also create a second branch A2, a second class P6, and a second student S2.
 | Parent | Only linked student summaries, APPROVED/PUBLISHED reports and parent-audience communications; no internal risk/welfare fields, school revenue/subscription metrics, finance, staff, alerts or unrelated learners |
 | Finance Officer | Finance records only in assigned branch |
 | HR Manager | Staff and leave records only in assigned branch |
-| Librarian | LIBRARY operations only in assigned branch |
+| Librarian | LIBRARY operations and own leave request in assigned branch |
+| Deputy Headteacher | School-wide academic oversight, report review, exam moderation, leave workflow visibility; cannot approve leave unless separately authorized |
+| Class Teacher | Assigned-class learners, attendance, report drafting/submission and own leave only |
+| Procurement Officer | Procurement create/update; Stores is read-only |
+| Storekeeper | Stores create/update; Procurement is read-only |
+| Examination Officer | Exam schedules, invigilation, mark moderation and report templates; assigned-class academic scope |
+| School Counsellor | Branch-scoped learner support and counselling/discipline cases; Welfare is read-only |
+| Welfare Nurse | Welfare/hostel updates; counselling/discipline is read-only |
+| Admissions Reception | Front desk, admissions and event workflows |
+| ICT Admin | ICT tickets/assets/incidents and limited user provisioning; cannot create school leadership, finance or HR roles |
 | School B owner/member | No access to School A rows |
 | Unassigned authenticated user | No access to either school |
 
@@ -50,7 +61,7 @@ Also create a second branch A2, a second class P6, and a second student S2.
 4. Parent cannot select another student's records or any report that is not APPROVED/PUBLISHED.
 5. Parent/student communication reads must be limited to rows whose audience explicitly includes their portal audience or ALL.
 6. Non-owner school summaries must mask owner IDs, subscription details, revenue and churn metrics.
-7. Parent cannot access attendance yet: the current attendance table stores a display name but has no student ID foreign key. Do not match by name.
+7. Parent can read attendance only when the row has a stable student_id matching one of their linked students. Backfill must update only unambiguous name matches; ambiguous legacy rows remain unavailable until manually linked.
 8. Finance Officer cannot read student medical/welfare alerts or HR records.
 9. No access assignment can grant SUPER_ADMIN; the verified school owner is the only account treated as the owner/Super Admin. A School Admin also cannot alter their own role by changing their assignment.
 10. A non-owner cannot append an audit record using another user's name or portal role.
@@ -58,14 +69,12 @@ Also create a second branch A2, a second class P6, and a second student S2.
 12. A disabled assignment (`active = false`) must immediately lose access after the next authenticated request.
 13. An unauthenticated/anonymous request must not read or mutate any tenant data.
 
-## Schema limitations to address separately
+## Remaining schema / workflow limitations
 
-- Attendance needs a `student_id` foreign key before parents/learners can safely see individual attendance.
-- Finance rows need a stable student/guardian relationship before parents can see their own invoices or balances. The student summary view currently exposes the cached `fee_balance_usd` only.
-- Communications currently has no `target_class` or recipient-student field. Parent communications are audience- and branch-scoped; teacher-to-class-parent targeting needs a schema/UI enhancement.
-- Leave requests need an `auth_user_id`/staff-account relationship before staff can see their own leave requests.
+- Finance rows still need a stable student/guardian relationship before parents can see their own itemized invoices. The parent-safe student summary exposes the cached fee balance only.
+- Communications currently has no `target_class` or recipient-student field. Parent communications remain audience- and branch-scoped; teacher-to-class-parent targeting still needs a schema/UI enhancement.
 - The current report-card status model should be validated against the app's exact workflow before production approval. Teachers are restricted to DRAFT/RETURNED rows and may submit; only leadership can approve/publish.
-- Operational `module_type` values must be checked against actual values emitted by the app. A mismatch can deny an otherwise valid operational role.
+- Operational module records now use role-specific labels and status workflows, but inventory quantities, purchase-order line items, exam timetables and ICT ticket SLAs still require dedicated structured fields and end-to-end operational testing.
 
 ## Release gate
 
