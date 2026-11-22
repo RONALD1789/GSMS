@@ -3,8 +3,11 @@ import {
   CalendarClock,
   CheckCircle2,
   GraduationCap,
+  Pencil,
   Plus,
   Sparkles,
+  Trash2,
+  UserPlus,
   Users,
   XCircle
 } from 'lucide-react';
@@ -22,6 +25,8 @@ import {
   LeaveStatus,
   PORTAL_ROLE_META,
   RoleCapability,
+  StaffMember,
+  Student,
   schoolHasModule
 } from '../types/gsms.ts';
 
@@ -30,6 +35,11 @@ export const PeopleAndLeaveScreen: React.FC = () => {
     workspace,
     searchQuery,
     addStudent,
+    updateStudent,
+    removeStudent,
+    addStaffMember,
+    updateStaffMember,
+    removeStaffMember,
     submitLeaveRequest,
     reviewLeaveRequest,
     generateQuickAiDraft
@@ -43,6 +53,19 @@ export const PeopleAndLeaveScreen: React.FC = () => {
   const [studentName, setStudentName] = useState('');
   const [studentClass, setStudentClass] = useState('Grade 10A');
   const [parentName, setParentName] = useState('');
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [removingStudent, setRemovingStudent] = useState<Student | null>(null);
+
+  // Staff directory modal
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+  const [staffName, setStaffName] = useState('');
+  const [staffRoleTitle, setStaffRoleTitle] = useState('');
+  const [staffDepartment, setStaffDepartment] = useState('');
+  const [staffSubjects, setStaffSubjects] = useState('');
+  const [staffWorkload, setStaffWorkload] = useState('20');
+  const [staffLeaveBalance, setStaffLeaveBalance] = useState('21');
+  const [removingStaff, setRemovingStaff] = useState<StaffMember | null>(null);
 
   // Apply leave modal
   const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -77,6 +100,7 @@ export const PeopleAndLeaveScreen: React.FC = () => {
     schoolHasModule(activeSchool, GsmsModule.ADMISSIONS);
   const canViewFees = RolePolicy.canViewLearnerFeeBalances(activeRole, extraCaps);
   const canViewLeaveBalances = RolePolicy.canViewStaffLeaveBalances(activeRole, extraCaps);
+  const canManageStaff = RolePolicy.has(activeRole, RoleCapability.MANAGE_STAFF, extraCaps);
   const canApplyLeave = RolePolicy.has(activeRole, RoleCapability.APPLY_LEAVE, extraCaps);
   const canApproveLeave = RolePolicy.has(activeRole, RoleCapability.APPROVE_LEAVE, extraCaps);
 
@@ -163,7 +187,16 @@ export const PeopleAndLeaveScreen: React.FC = () => {
             title="Student Directory"
             subtitle={`${visibleStudents.length} learners in current scope`}
             actionLabel={canEnroll ? '+ Enroll' : undefined}
-            onAction={canEnroll ? () => setShowEnrollModal(true) : undefined}
+            onAction={
+              canEnroll
+                ? () => {
+                    setEditingStudent(null);
+                    setStudentName('');
+                    setParentName('');
+                    setShowEnrollModal(true);
+                  }
+                : undefined
+            }
           />
           {visibleStudents.length === 0 ? (
             <EmptyStateCard
@@ -205,6 +238,33 @@ export const PeopleAndLeaveScreen: React.FC = () => {
                       ) : null}
                     </div>
                   </div>
+                  {canEnroll ? (
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8EEF5]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingStudent(stu);
+                          setAdmissionNo(stu.admissionNo);
+                          setStudentName(stu.fullName);
+                          setStudentClass(stu.className);
+                          setParentName(stu.parentName);
+                          setShowEnrollModal(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#D0D9E4] text-[#1D4ED8] text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRemovingStudent(stu)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FEE2E2] hover:bg-[#FECACA] text-[#DC2626] text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remove
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -218,6 +278,21 @@ export const PeopleAndLeaveScreen: React.FC = () => {
           <SectionHeader
             title="Staff & Faculty Directory"
             subtitle="Teaching workloads and operational assignments"
+            actionLabel={canManageStaff ? '+ Add Staff' : undefined}
+            onAction={
+              canManageStaff
+                ? () => {
+                    setEditingStaff(null);
+                    setStaffName('');
+                    setStaffRoleTitle('');
+                    setStaffDepartment('');
+                    setStaffSubjects('');
+                    setStaffWorkload('20');
+                    setStaffLeaveBalance('21');
+                    setShowStaffModal(true);
+                  }
+                : undefined
+            }
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {visibleStaff.map((st) => (
@@ -247,6 +322,35 @@ export const PeopleAndLeaveScreen: React.FC = () => {
                       </span>
                     ) : null}
                   </div>
+                  {canManageStaff ? (
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8EEF5]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingStaff(st);
+                          setStaffName(st.fullName);
+                          setStaffRoleTitle(st.roleTitle);
+                          setStaffDepartment(st.department);
+                          setStaffSubjects(st.subjectsSummary || '');
+                          setStaffWorkload(String(st.workloadHours));
+                          setStaffLeaveBalance(String(st.leaveBalanceDays));
+                          setShowStaffModal(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#D0D9E4] text-[#1D4ED8] text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRemovingStaff(st)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FEE2E2] hover:bg-[#FECACA] text-[#DC2626] text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remove
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -347,16 +451,22 @@ export const PeopleAndLeaveScreen: React.FC = () => {
         </div>
       ) : null}
 
-      {/* Modal: Enroll Student */}
+      {/* Modal: Enroll / Edit Student */}
       <ModalDialog
         open={showEnrollModal}
-        title="Enroll New Student"
-        onClose={() => setShowEnrollModal(false)}
+        title={editingStudent ? 'Edit Learner Record' : 'Enroll New Student'}
+        onClose={() => {
+          setShowEnrollModal(false);
+          setEditingStudent(null);
+        }}
         footer={
           <>
             <button
               type="button"
-              onClick={() => setShowEnrollModal(false)}
+              onClick={() => {
+                setShowEnrollModal(false);
+                setEditingStudent(null);
+              }}
               className="px-3.5 py-2 rounded-xl border border-[#D0D9E4] text-xs font-semibold text-[#475569] cursor-pointer"
             >
               Cancel
@@ -365,22 +475,33 @@ export const PeopleAndLeaveScreen: React.FC = () => {
               type="button"
               onClick={() => {
                 if (!studentName.trim()) return;
-                addStudent(
-                  activeSchool,
-                  workspace.activeBranchId,
-                  admissionNo,
-                  studentName,
-                  studentClass,
-                  parentName
-                );
-                setStudentName('');
-                setParentName('');
+                if (editingStudent) {
+                  updateStudent(activeSchool.id, editingStudent, {
+                    fullName: studentName,
+                    className: studentClass,
+                    stream: editingStudent.stream || '',
+                    parentName,
+                    parentContact: editingStudent.parentContact || ''
+                  });
+                  setEditingStudent(null);
+                } else {
+                  addStudent(
+                    activeSchool,
+                    workspace.activeBranchId,
+                    admissionNo,
+                    studentName,
+                    studentClass,
+                    parentName
+                  );
+                  setStudentName('');
+                  setParentName('');
+                }
                 setShowEnrollModal(false);
               }}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              Enroll Student
+              {editingStudent ? 'Save Changes' : 'Enroll Student'}
             </button>
           </>
         }
@@ -391,9 +512,15 @@ export const PeopleAndLeaveScreen: React.FC = () => {
             <input
               type="text"
               value={admissionNo}
+              disabled={Boolean(editingStudent)}
               onChange={(e) => setAdmissionNo(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-xl border border-[#D0D9E4] font-mono-num"
+              className="w-full px-3 py-2 text-sm rounded-xl border border-[#D0D9E4] font-mono-num disabled:bg-[#F5F7FB] disabled:text-[#94A3B8]"
             />
+            {editingStudent ? (
+              <p className="text-[11px] text-[#94A3B8] mt-1">
+                Admission numbers are fixed once a learner is enrolled.
+              </p>
+            ) : null}
           </div>
           <div>
             <label className="block text-xs font-semibold text-[#475569] mb-1">Full Name</label>
@@ -429,6 +556,198 @@ export const PeopleAndLeaveScreen: React.FC = () => {
             </div>
           </div>
         </div>
+      </ModalDialog>
+
+      {/* Modal: Remove Student */}
+      <ModalDialog
+        open={Boolean(removingStudent)}
+        title="Remove Learner Record"
+        onClose={() => setRemovingStudent(null)}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setRemovingStudent(null)}
+              className="px-3.5 py-2 rounded-xl border border-[#D0D9E4] text-xs font-semibold text-[#475569] cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (removingStudent) removeStudent(activeSchool.id, removingStudent);
+                setRemovingStudent(null);
+              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#DC2626] text-white text-xs font-semibold cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Remove Learner
+            </button>
+          </>
+        }
+      >
+        <p className="text-xs text-[#475569] leading-relaxed">
+          {removingStudent?.fullName} ({removingStudent?.admissionNo}) will be removed from the
+          learner directory for {activeSchool.name}. Attendance history and the audit trail stay
+          intact. Learners who already have report cards on file cannot be removed.
+        </p>
+      </ModalDialog>
+
+      {/* Modal: Add / Edit Staff */}
+      <ModalDialog
+        open={showStaffModal}
+        title={editingStaff ? 'Edit Staff Record' : 'Add Staff Member'}
+        onClose={() => {
+          setShowStaffModal(false);
+          setEditingStaff(null);
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setShowStaffModal(false);
+                setEditingStaff(null);
+              }}
+              className="px-3.5 py-2 rounded-xl border border-[#D0D9E4] text-xs font-semibold text-[#475569] cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!staffName.trim()) return;
+                const input = {
+                  fullName: staffName,
+                  roleTitle: staffRoleTitle,
+                  department: staffDepartment,
+                  subjectsSummary: staffSubjects,
+                  workloadHours: Number(staffWorkload) || 0,
+                  leaveBalanceDays: Number(staffLeaveBalance) || 0
+                };
+                if (editingStaff) {
+                  updateStaffMember(activeSchool.id, editingStaff, input);
+                } else {
+                  addStaffMember(activeSchool, workspace.activeBranchId, input);
+                }
+                setShowStaffModal(false);
+                setEditingStaff(null);
+              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              {editingStaff ? 'Save Changes' : 'Add Staff'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-[#475569] mb-1">Full Name</label>
+            <input
+              type="text"
+              value={staffName}
+              onChange={(e) => setStaffName(e.target.value)}
+              placeholder="e.g. Grace Nakato"
+              className="w-full px-3 py-2 text-sm rounded-xl border border-[#D0D9E4]"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-[#475569] mb-1">Role / Title</label>
+              <input
+                type="text"
+                value={staffRoleTitle}
+                onChange={(e) => setStaffRoleTitle(e.target.value)}
+                placeholder="e.g. Mathematics Teacher"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-[#D0D9E4]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#475569] mb-1">Department</label>
+              <input
+                type="text"
+                value={staffDepartment}
+                onChange={(e) => setStaffDepartment(e.target.value)}
+                placeholder="e.g. Sciences"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-[#D0D9E4]"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#475569] mb-1">
+              Subjects / Scope
+            </label>
+            <input
+              type="text"
+              value={staffSubjects}
+              onChange={(e) => setStaffSubjects(e.target.value)}
+              placeholder="e.g. Grade 9-11 Mathematics"
+              className="w-full px-3 py-2 text-sm rounded-xl border border-[#D0D9E4]"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-[#475569] mb-1">
+                Weekly Workload (h)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={staffWorkload}
+                onChange={(e) => setStaffWorkload(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-xl border border-[#D0D9E4] font-mono-num"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#475569] mb-1">
+                Leave Balance (days)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={staffLeaveBalance}
+                onChange={(e) => setStaffLeaveBalance(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-xl border border-[#D0D9E4] font-mono-num"
+              />
+            </div>
+          </div>
+        </div>
+      </ModalDialog>
+
+      {/* Modal: Remove Staff */}
+      <ModalDialog
+        open={Boolean(removingStaff)}
+        title="Remove Staff Record"
+        onClose={() => setRemovingStaff(null)}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setRemovingStaff(null)}
+              className="px-3.5 py-2 rounded-xl border border-[#D0D9E4] text-xs font-semibold text-[#475569] cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (removingStaff) removeStaffMember(activeSchool.id, removingStaff);
+                setRemovingStaff(null);
+              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#DC2626] text-white text-xs font-semibold cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Remove Staff
+            </button>
+          </>
+        }
+      >
+        <p className="text-xs text-[#475569] leading-relaxed">
+          {removingStaff?.fullName} ({removingStaff?.staffNo}) will be removed from the staff
+          directory for {activeSchool.name}. Staff with a leave request awaiting review must be
+          resolved first.
+        </p>
       </ModalDialog>
 
       {/* Modal: Apply Leave */}
