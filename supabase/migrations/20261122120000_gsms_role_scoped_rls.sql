@@ -1011,6 +1011,10 @@ using (
     public.gsms_is_school_manager(school_id)
     or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER'])
     or (
+      upper(entry_type) = 'PAYROLL'
+      and public.gsms_has_any_role(school_id, array['HR_MANAGER'])
+    )
+    or (
       upper(entry_type) = 'INVOICE'
       and student_id is not null
       and exists (
