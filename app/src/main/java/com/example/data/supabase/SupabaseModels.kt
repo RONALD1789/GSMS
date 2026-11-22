@@ -201,6 +201,7 @@ data class SbAttendanceRow(
     @Json(name = "owner_id") val ownerId: String,
     @Json(name = "target_type") val targetType: String,
     @Json(name = "target_name") val targetName: String,
+    @Json(name = "student_id") val studentId: String? = null,
     @Json(name = "class_name") val className: String?,
     @Json(name = "date_iso") val dateIso: String,
     val status: String
@@ -445,6 +446,7 @@ fun AttendanceRecord.toSupabaseRow(fallbackOwnerUid: String, activeSchoolId: Str
     ownerId = ownerId.ifBlank { fallbackOwnerUid },
     targetType = targetType,
     targetName = targetName,
+    studentId = studentId,
     className = className,
     dateIso = dateIso,
     status = status
