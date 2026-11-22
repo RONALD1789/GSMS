@@ -16,6 +16,12 @@ data class SupabaseUserMetadata(
 )
 
 @Keep
+data class SupabaseIdTokenRequest(
+    val provider: String = "google",
+    @Json(name = "id_token") val idToken: String
+)
+
+@Keep
 data class SupabaseSignUpRequest(
     val email: String,
     val password: String,
