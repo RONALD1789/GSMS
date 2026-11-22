@@ -957,6 +957,25 @@ create index if not exists idx_gsms_finance_student_scope
   on public.gsms_finance_entries(school_id, student_id, entry_type)
   where student_id is not null;
 
+-- Link legacy invoices only when the guardian name identifies exactly one learner in that branch.
+update public.gsms_finance_entries e
+set student_id = (
+  select min(s.id)
+  from public.gsms_students s
+  where s.school_id = e.school_id
+    and s.branch_id = e.branch_id
+    and lower(s.parent_name) = lower(e.party_name)
+)
+where e.student_id is null
+  and upper(e.entry_type) = 'INVOICE'
+  and (
+    select count(*)
+    from public.gsms_students s
+    where s.school_id = e.school_id
+      and s.branch_id = e.branch_id
+      and lower(s.parent_name) = lower(e.party_name)
+  ) = 1;
+
 create or replace view public.gsms_finance_student_summaries
 with (security_barrier = true)
 as
@@ -1032,6 +1051,15 @@ with check (
   (public.gsms_is_school_manager(school_id)
     or public.gsms_has_any_role(school_id, array['FINANCE_OFFICER']))
   and public.gsms_can_access_branch(school_id, branch_id)
+  and (
+    upper(entry_type) <> 'INVOICE'
+    or exists (
+      select 1 from public.gsms_students s
+      where s.id = student_id
+        and s.school_id = gsms_finance_entries.school_id
+        and s.branch_id = gsms_finance_entries.branch_id
+    )
+  )
 );
 create policy "gsms_finance_manager_delete" on public.gsms_finance_entries
 for delete to authenticated
