@@ -495,6 +495,49 @@ class SupabaseWorkspaceController(
         )
     }
 
+    suspend fun createFinanceInvoice(
+        school: School,
+        branchId: String,
+        student: Student,
+        title: String,
+        category: String,
+        amountUsd: Double
+    ): Result<String> {
+        if (amountUsd <= 0.0) return Result.failure(IllegalArgumentException("Invoice amount must be greater than zero."))
+        val id = newId("fin")
+        val invoice = FinanceEntry(
+            id = id,
+            schoolId = school.id,
+            branchId = branchId,
+            academicYear = school.activeAcademicYear,
+            term = school.activeTerm,
+            ownerId = userId,
+            entryType = "INVOICE",
+            referenceNo = "INV-${id.removePrefix("fin").uppercase()}",
+            title = title.trim(),
+            partyName = student.parentName.ifBlank { student.fullName },
+            category = category.trim().ifBlank { "Tuition" },
+            amountUsd = amountUsd,
+            paidUsd = 0.0,
+            status = "PENDING",
+            studentId = student.id
+        )
+        supabase.saveFinanceEntry(invoice, userId, school.id).getOrThrow()
+        val audit = AuditLog(
+            id = newId("aud"), schoolId = school.id, ownerId = userId,
+            actorName = currentWorkspace()?.userProfile?.displayName?.takeIf { it.isNotBlank() } ?: displayName,
+            actorRole = currentWorkspace()?.activeRole?.name.orEmpty(),
+            actionType = "FINANCE_INVOICE_CREATED",
+            moduleName = "FINANCE",
+            summary = "Created ${invoice.referenceNo} for ${student.fullName}"
+        )
+        supabase.appendAuditLog(audit, userId, school.id)
+        mutateSuccess { ws ->
+            ws.copy(finance = listOf(invoice) + ws.finance, auditLogs = listOf(audit) + ws.auditLogs)
+        }
+        return Result.success("Invoice ${invoice.referenceNo} created for ${student.fullName}")
+    }
+
     suspend fun recordFinancePayment(schoolId: String, entry: FinanceEntry, amountUsd: Double): Result<String> {
         val newPaid = (entry.paidUsd + amountUsd).coerceAtMost(entry.amountUsd)
         val nextStatus = if (newPaid >= entry.amountUsd) "PAID" else "PARTIAL"
