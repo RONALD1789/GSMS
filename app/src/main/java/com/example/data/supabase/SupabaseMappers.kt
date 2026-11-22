@@ -47,6 +47,24 @@ fun SbAccessAssignmentRow.toDomain(): UserAccessAssignment = UserAccessAssignmen
     updatedBy = updatedBy
 )
 
+fun SbParentStudentRow.toDomain(): Student = Student(
+    id = id,
+    schoolId = schoolId,
+    branchId = branchId,
+    ownerId = ownerId,
+    admissionNo = admissionNo,
+    fullName = fullName,
+    className = className,
+    stream = stream,
+    parentName = parentName,
+    parentContact = null,
+    attendanceRate = attendanceRate,
+    averageScore = averageScore,
+    feeBalanceUsd = feeBalanceUsd,
+    riskLevel = "LOW",
+    welfareStatus = "Not disclosed"
+)
+
 fun SbStudentRow.toDomain(): Student = Student(
     id = id,
     schoolId = schoolId,
