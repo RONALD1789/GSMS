@@ -518,6 +518,28 @@ class SupabaseWorkspaceController(
         return Result.success("Saved $moduleType record")
     }
 
+    suspend fun updateOperationStatus(schoolId: String, operation: OperationRecord, status: String): Result<String> {
+        val updated = operation.copy(status = status)
+        supabase.saveOperation(updated, userId, schoolId).getOrThrow()
+        val ws = currentWorkspace()
+        val audit = AuditLog(
+            id = newId("aud"), schoolId = schoolId, ownerId = userId,
+            actorName = ws?.userProfile?.displayName?.takeIf { it.isNotBlank() } ?: displayName,
+            actorRole = ws?.activeRole?.name.orEmpty(),
+            actionType = "OPERATION_STATUS_UPDATED",
+            moduleName = operation.moduleType,
+            summary = "${operation.title}: ${operation.status} → $status"
+        )
+        supabase.appendAuditLog(audit, userId, schoolId)
+        mutateSuccess { state ->
+            state.copy(
+                operations = state.operations.map { if (it.id == updated.id) updated else it },
+                auditLogs = listOf(audit) + state.auditLogs
+            )
+        }
+        return Result.success("Updated ${operation.title} to $status")
+    }
+
     suspend fun updateAlertStatus(schoolId: String, alert: EarlyWarningAlert, status: String): Result<String> {
         val updated = alert.copy(status = status)
         supabase.saveAlert(updated, userId, schoolId).getOrThrow()
