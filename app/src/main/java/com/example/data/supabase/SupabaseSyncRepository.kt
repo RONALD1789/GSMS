@@ -291,6 +291,14 @@ class SupabaseSyncRepository(
     suspend fun signOut(): Result<Unit> {
         val api = apiService
         val hadToken = !accessToken.isNullOrBlank()
+        // Revoke the server session while the current access token is still attached.
+        if (api != null && hadToken) {
+            try {
+                withContext(Dispatchers.IO) { api.signOut() }
+            } catch (e: Exception) {
+                Log.w(TAG, "Supabase remote sign-out could not be confirmed: ${e.javaClass.simpleName}")
+            }
+        }
         accessToken = null
         supabaseUserId = null
         sessionStore?.clear()
@@ -303,13 +311,6 @@ class SupabaseSyncRepository(
                 remoteCounts = emptyMap(),
                 lastError = null
             )
-        }
-        if (api != null && hadToken) {
-            try {
-                withContext(Dispatchers.IO) { api.signOut() }
-            } catch (_: Exception) {
-                // Local memory session already cleared.
-            }
         }
         return Result.success(Unit)
     }
