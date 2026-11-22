@@ -782,9 +782,21 @@ using (public.gsms_is_school_manager(school_id));
 drop policy if exists "gsms_staff_tenant_isolation" on public.gsms_staff;
 create policy "gsms_staff_authorized_select" on public.gsms_staff
 for select to authenticated
-using ((public.gsms_is_school_manager(school_id)
-  or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'HR_MANAGER']))
-  and public.gsms_can_access_branch(school_id, branch_id));
+using (
+  (
+    public.gsms_is_school_manager(school_id)
+    or public.gsms_has_any_role(school_id, array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'HR_MANAGER'])
+    or exists (
+      select 1
+      from public.gsms_user_access_assignments a
+      where a.school_id = gsms_staff.school_id
+        and a.active = true
+        and a.auth_user_id = (select auth.uid())
+        and lower(a.full_name) = lower(gsms_staff.full_name)
+    )
+  )
+  and public.gsms_can_access_branch(school_id, branch_id)
+);
 create policy "gsms_staff_authorized_insert" on public.gsms_staff
 for insert to authenticated
 with check ((public.gsms_is_school_manager(school_id)
