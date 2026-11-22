@@ -334,7 +334,7 @@ class GsmsViewModel(
         if (!requireCapability(RoleCapability.COMPOSE_COMMUNICATIONS, "send school notices", senderRole)) return
         if (senderRole in setOf(PortalRole.TEACHER, PortalRole.CLASS_TEACHER)) {
             val assignedClasses = (uiState.value as? UiState.Success)?.data?.assignedClasses.orEmpty()
-            if (targetClass.isNullOrBlank() || targetClass !in assignedClasses) {
+            if (targetClass?.let { it.isNotBlank() && it in assignedClasses } != true) {
                 _statusBanner.value = "Teachers may send parent notices only to one of their assigned classes."
                 return
             }
