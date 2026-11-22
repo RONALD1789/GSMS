@@ -60,7 +60,8 @@ enum class RoleCapability {
     MANAGE_ICT,
     MANAGE_COUNSELLING,
     MANAGE_HEALTH,
-    MANAGE_ADMISSIONS
+    MANAGE_ADMISSIONS,
+    CREATE_FINANCE_INVOICE
 }
 
 object RolePolicy {
@@ -172,6 +173,7 @@ object RolePolicy {
             RoleCapability.VIEW_COMMUNICATIONS
         ),
         PortalRole.FINANCE_OFFICER to setOf(
+            RoleCapability.CREATE_FINANCE_INVOICE,
             RoleCapability.APPLY_LEAVE,
             RoleCapability.VIEW_FINANCE_ALL,
             RoleCapability.RECORD_FINANCE_PAYMENT,
@@ -648,7 +650,7 @@ val RoleCapability.category: String
         RoleCapability.APPLY_LEAVE, RoleCapability.APPROVE_LEAVE -> "People & HR"
         RoleCapability.VIEW_FINANCE_ALL, RoleCapability.VIEW_PAYROLL_ONLY,
         RoleCapability.VIEW_OWN_INVOICES_ONLY, RoleCapability.RECORD_FINANCE_PAYMENT,
-        RoleCapability.EDIT_OPERATIONS, RoleCapability.MODERATE_EXAMS, RoleCapability.MANAGE_PROCUREMENT, RoleCapability.MANAGE_INVENTORY, RoleCapability.MANAGE_ICT, RoleCapability.MANAGE_COUNSELLING, RoleCapability.MANAGE_HEALTH, RoleCapability.MANAGE_ADMISSIONS -> "Operations & Finance"
+        RoleCapability.EDIT_OPERATIONS, RoleCapability.MODERATE_EXAMS, RoleCapability.MANAGE_PROCUREMENT, RoleCapability.MANAGE_INVENTORY, RoleCapability.MANAGE_ICT, RoleCapability.MANAGE_COUNSELLING, RoleCapability.MANAGE_HEALTH, RoleCapability.MANAGE_ADMISSIONS, RoleCapability.CREATE_FINANCE_INVOICE -> "Operations & Finance"
         RoleCapability.VIEW_ANALYTICS_CHARTS, RoleCapability.VIEW_ALERTS,
         RoleCapability.MANAGE_ALERTS, RoleCapability.VIEW_COMMUNICATIONS,
         RoleCapability.COMPOSE_COMMUNICATIONS, RoleCapability.VIEW_AUDIT_LOGS -> "Analytics & Communications"
