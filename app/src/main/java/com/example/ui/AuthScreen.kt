@@ -37,8 +37,6 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.example.R
 import com.example.data.supabase.SupabaseSyncRepository
-import com.google.firebase.Firebase
-import com.google.firebase.auth.auth
 import com.example.ui.theme.EmeraldBright
 import com.example.ui.theme.EmeraldTeal
 import com.example.ui.theme.OxfordNavy
@@ -162,7 +160,6 @@ fun performSignOut(
             } catch (e: Exception) {
                 Log.w("Auth", "Failed to clear credential state: ${e.message}")
             } finally {
-                Firebase.auth.signOut()
                 onSignOutComplete()
             }
         }
