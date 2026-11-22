@@ -244,7 +244,7 @@ security definer
 set search_path = public, pg_temp
 as $$
   select public.gsms_is_school_owner(target_school_id)
-      or public.gsms_has_any_role(target_school_id, array['SCHOOL_ADMIN', 'ICT_ADMIN']);
+      or public.gsms_has_any_role(target_school_id, array['SCHOOL_ADMIN']);
 $$;
 
 create or replace function public.gsms_can_manage_operation(
@@ -556,9 +556,10 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $$
-  select public.gsms_is_school_manager(target_school_id);
-$$;
+as $
+  select public.gsms_is_school_manager(target_school_id)
+      or public.gsms_has_any_role(target_school_id, array['ICT_ADMIN']);
+$;
 
 -- Do not expose helper functions to anonymous clients.
 revoke all on function public.gsms_is_school_owner(text) from public, anon;
