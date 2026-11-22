@@ -302,6 +302,25 @@ class GsmsViewModel(
         launchMutation { workspaceController.reviewLeaveRequest(schoolId, leave, staffMember, approve, currentActorName()) }
     }
 
+    fun createFinanceInvoice(
+        school: School,
+        branchId: String,
+        student: Student,
+        title: String,
+        category: String,
+        amountUsd: Double,
+        role: PortalRole
+    ) {
+        if (!requireCapability(RoleCapability.CREATE_FINANCE_INVOICE, "create fee invoices", role)) return
+        if (amountUsd <= 0.0) {
+            _statusBanner.value = "Invoice amount must be greater than zero."
+            return
+        }
+        launchMutation {
+            workspaceController.createFinanceInvoice(school, branchId, student, title, category, amountUsd)
+        }
+    }
+
     fun recordFinancePayment(schoolId: String, entry: FinanceEntry, amountUsd: Double) {
         if (!requireCapability(RoleCapability.RECORD_FINANCE_PAYMENT, "record fee payments")) return
         launchMutation { workspaceController.recordFinancePayment(schoolId, entry, amountUsd) }
