@@ -23,7 +23,7 @@ fun PeopleAndLeaveScreen(
 ) {
     val school = workspace.activeSchool ?: return
     val role = workspace.activeRole
-    val tabs = remember(role, school.enabledModules) {
+    val tabs = remember(role, school.enabledModules, workspace.activeExtraCapabilities) {
         RolePolicy.peopleSubTabs(role, school, workspace.activeExtraCapabilities)
     }
     var selectedTab by remember(tabs) { mutableIntStateOf(0) }
@@ -150,7 +150,7 @@ fun PeopleAndLeaveScreen(
                 }
             }
 
-            "Leave Workflow" -> {
+            "Leave Workflow", "My Leave" -> {
                 val canApplyLeave = role.has(RoleCapability.APPLY_LEAVE)
                 val canApproveLeave = role.has(RoleCapability.APPROVE_LEAVE)
                 LazyColumn(
