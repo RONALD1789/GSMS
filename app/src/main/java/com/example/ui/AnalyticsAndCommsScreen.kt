@@ -306,7 +306,7 @@ private fun ComposeMessageDialog(
         },
         confirmButton = {
             Button(
-                enabled = title.isNotBlank() && body.isNotBlank() && (!teacherTargeting || targetClass in assignedClasses),
+                enabled = title.isNotBlank() && body.isNotBlank() && (!teacherTargeting || targetClass?.let { it in assignedClasses } == true),
                 onClick = {
                     if (title.isNotBlank() && body.isNotBlank()) {
                         onSend(channel, effectiveAudience, title, body, aiDrafted, targetClass.takeIf { teacherTargeting })
