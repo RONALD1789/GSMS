@@ -172,6 +172,28 @@ class SupabaseSyncRepository(
         }
     }
 
+    suspend fun signInWithGoogleIdToken(
+        idToken: String,
+        email: String,
+        displayName: String? = null
+    ): Result<String> {
+        val api = apiService ?: return failState(config.validationError ?: "Supabase Secrets are not configured.")
+        val cleanEmail = email.trim()
+        if (idToken.isBlank() || !isValidEmailFormat(cleanEmail)) {
+            return Result.failure(IllegalArgumentException("Google did not return a valid identity token and email address."))
+        }
+        _state.update { it.copy(isBusy = true, lastError = null) }
+        return try {
+            val response = withContext(Dispatchers.IO) {
+                api.signInWithIdToken(body = SupabaseIdTokenRequest(idToken = idToken))
+            }
+            handleAuthResponse("Google Sign-In", cleanEmail, displayName, response)
+        } catch (e: Exception) {
+            Log.w(TAG, "Supabase Google sign-in failed: ${e.javaClass.simpleName}")
+            failState("Google sign-in failed: ${e.localizedMessage ?: "Network error"}")
+        }
+    }
+
     suspend fun signUp(
         email: String,
         password: String,
