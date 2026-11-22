@@ -1054,6 +1054,7 @@ with check (
   and public.gsms_can_access_branch(school_id, branch_id)
   and (
     upper(entry_type) <> 'INVOICE'
+    or student_id is null
     or exists (
       select 1 from public.gsms_students s
       where s.id = student_id
