@@ -38,7 +38,7 @@ Also create a second branch A2, a second class P6, and a second student S2.
 | Examination Officer | Exam schedules, invigilation, mark moderation and report templates; assigned-class academic scope |
 | School Counsellor | Branch-scoped learner support and counselling/discipline cases; Welfare is read-only |
 | Welfare Nurse | Welfare/hostel updates; counselling/discipline is read-only |
-| Admissions Reception | Front desk, admissions and event workflows |
+| Admissions Reception | Safe admissions directory (name, class, guardian contact only), enrollment in assigned branch, front desk and event workflows; no risk, welfare or finance fields |
 | ICT Admin | ICT tickets/assets/incidents and limited user provisioning; cannot create school leadership, finance or HR roles |
 | School B owner/member | No access to School A rows |
 | Unassigned authenticated user | No access to either school |
@@ -64,7 +64,7 @@ Also create a second branch A2, a second class P6, and a second student S2.
 7. Non-owner school summaries must mask owner IDs, subscription details, revenue and churn metrics.
 8. Parent can read attendance only when the row has a stable student_id matching one of their linked students. Backfill must update only unambiguous name matches; ambiguous legacy rows remain unavailable until manually linked.
 9. Finance Officer cannot read student medical/welfare alerts or HR records.
-10. No access assignment can grant SUPER_ADMIN; the verified school owner is the only account treated as the owner/Super Admin. A School Admin also cannot alter their own role by changing their assignment.
+25. No access assignment can grant SUPER_ADMIN; the verified school owner is the only account treated as the owner/Super Admin. A School Admin also cannot alter their own role by changing their assignment.
 11. A non-owner cannot append an audit record using another user's name or portal role.
 12. A member of School A cannot read or mutate any School B data.
 13. A disabled assignment (`active = false`) must immediately lose access after the next authenticated request.
