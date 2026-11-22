@@ -221,6 +221,9 @@ class SupabaseWorkspaceController(
         extraPermissions: List<String>,
         actorName: String
     ): Result<String> {
+        if (primaryRole == PortalRole.SUPER_ADMIN) {
+            return Result.failure(IllegalArgumentException("SUPER_ADMIN is reserved for the verified school owner."))
+        }
         val activeWorkspace = currentWorkspace()?.takeIf { it.activeSchool?.id == schoolId }
         val mainBranchId = activeWorkspace?.branches?.firstOrNull { it.mainCampus }?.id ?: "branch_main"
         val selectedBranchId = activeWorkspace?.activeBranchId
