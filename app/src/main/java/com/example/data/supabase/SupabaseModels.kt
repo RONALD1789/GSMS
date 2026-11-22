@@ -140,6 +140,22 @@ data class SbStudentRow(
 )
 
 @Keep
+data class SbParentStudentRow(
+    val id: String,
+    @Json(name = "school_id") val schoolId: String,
+    @Json(name = "branch_id") val branchId: String,
+    @Json(name = "owner_id") val ownerId: String,
+    @Json(name = "admission_no") val admissionNo: String,
+    @Json(name = "full_name") val fullName: String,
+    @Json(name = "class_name") val className: String,
+    val stream: String?,
+    @Json(name = "parent_name") val parentName: String,
+    @Json(name = "attendance_rate") val attendanceRate: Double,
+    @Json(name = "average_score") val averageScore: Double,
+    @Json(name = "fee_balance_usd") val feeBalanceUsd: Double
+)
+
+@Keep
 data class SbStaffRow(
     val id: String,
     @Json(name = "school_id") val schoolId: String,
