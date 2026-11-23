@@ -66,7 +66,7 @@ function getSupabaseServerConfig(): {
     return {
       isConfigured: false,
       baseUrl: null,
-      anonKey: null,
+      publishableKey: null,
       maskedHost: 'Invalid URL',
       issue: 'SUPABASE_URL must be a valid https:// URL.'
     };
