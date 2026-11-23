@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, "web/gsms-portal"]
   pull_request:
-    branches: [main]
+    branches: [main, "migration/supabase-auth-google"]
 
 jobs:
   build:
