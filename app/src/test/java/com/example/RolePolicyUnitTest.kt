@@ -104,7 +104,7 @@ class RolePolicyUnitTest {
         assertEquals(listOf("Transport"), RolePolicy.operationSections(PortalRole.TRANSPORT_MANAGER, fullSchool))
         assertEquals(listOf("Welfare", "Counselling", "Discipline", "Hostel"), RolePolicy.operationSections(PortalRole.WELFARE_NURSE, fullSchool))
         assertEquals(listOf("Front Desk", "Admissions", "Events"), RolePolicy.operationSections(PortalRole.ADMISSIONS_RECEPTION, fullSchool))
-        assertEquals(listOf("Finance", "Procurement", "Stores"), RolePolicy.operationSections(PortalRole.PROCUREMENT_OFFICER, fullSchool))
+        assertEquals(listOf("Procurement", "Stores"), RolePolicy.operationSections(PortalRole.PROCUREMENT_OFFICER, fullSchool))
         assertEquals(listOf("Procurement", "Stores"), RolePolicy.operationSections(PortalRole.STOREKEEPER, fullSchool))
         assertEquals(listOf("Welfare", "Counselling", "Discipline"), RolePolicy.operationSections(PortalRole.SCHOOL_COUNSELLOR, fullSchool))
         assertEquals(listOf("Stores", "ICT Systems"), RolePolicy.operationSections(PortalRole.ICT_ADMIN, fullSchool))
