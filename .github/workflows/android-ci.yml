@@ -5,7 +5,6 @@ on:
     branches:
       - main
       - migration/supabase-auth-google
-      - web/gsms-portal
   pull_request:
     branches:
       - main
