@@ -1,93 +1,73 @@
-# GSMS Refactoring Plan
+# GSMS Implementation and Refactoring Plan
 
-## Guiding rule
+## Guiding rules
 
-Refactor in small, reviewable steps. Each step must preserve existing behavior, tenant isolation and role permissions. Do not combine a broad UI redesign, data migration and package reorganization in one change.
+- Supabase is the only backend for Android and web.
+- Refactor in small, reviewable steps.
+- Preserve tenant isolation, role permissions and existing school data.
+- Do not combine broad UI redesigns, schema changes and package reorganization in one unreviewed change.
+- Never place privileged keys or provider secrets in client code.
 
-## Phase 0 — Baseline and safeguards
+## Phase 1 — Stabilize the Supabase foundation
 
-- [x] Inspect the existing Android, Firebase and Supabase structure.
-- [x] Create a dedicated refactoring branch.
-- [x] Document the current architecture and target boundaries.
-- [x] Move seed-data implementation into a dedicated data/seed package.
-- [x] Isolate Firestore client configuration in a dedicated Firebase data provider.
-- [x] Extract read-only Firestore snapshot streams into a focused repository while preserving the existing GsmsRepository API.
-- [x] Extract append-only audit event persistence into AuditLogRepository while preserving the existing GsmsRepository helper.
-- [ ] Run the existing unit, instrumentation and Firestore rules test suites in a configured build environment.
-- [ ] Record baseline build and test results before moving implementation files.
+- [x] Standardize client configuration around the Supabase URL and publishable key.
+- [x] Route Android authentication and session restoration through Supabase Auth.
+- [x] Route browser authentication and data access through Supabase.
+- [x] Move AI provider requests behind an authenticated Supabase Edge Function.
+- [x] Add role-aware tenant access checks and an additive RLS migration.
+- [ ] Apply migrations to a disposable Supabase project and run the complete RLS test plan.
+- [ ] Verify owner, administrator, headteacher, teacher, parent and student access using separate authenticated accounts.
+- [ ] Confirm OAuth provider configuration and recovery flows.
 
-## Phase 1 — Separate domain contracts from infrastructure
+## Phase 2 — Separate domain contracts from infrastructure
 
 - Extract domain models, role/capability definitions and repository interfaces into domain packages.
-- Keep existing model field names and serialization behavior.
-- Add explicit mappers at Firebase/Supabase boundaries where required.
-- Move Firestore implementation behind repository interfaces.
-- Verify no UI screen imports Firebase SDK classes for data access.
+- Keep model field names and serialization behavior stable unless a reviewed migration requires a change.
+- Keep Supabase queries and response mapping inside data-access modules.
+- Ensure UI components do not issue direct database requests.
+- Add explicit error, loading, empty and retry states to every data workflow.
 
-## Phase 2 — Split the data layer
+## Phase 3 — Complete the data layer
 
-Break the current large repository into focused implementations:
-- Identity and user profile
-- School and branch administration
+Create focused implementations for:
+- Identity, user profiles and role assignments
+- School, branch and academic-year administration
 - Student and staff records
 - Academics, attendance and report cards
-- Finance and payments
+- Finance, invoices and payments
 - Leave and HR
-- Communications and operations
-- Alerts and audit logs
+- Communications and notifications
+- Library, transport, procurement and inventory
+- Alerts, audit logs and analytics
 
-Keep a facade or compatibility adapter while callers migrate. Avoid changing Firestore paths and rules during this phase.
+Every query and mutation must respect tenant context and server-side RLS. Use stable UUID relationships rather than matching records by display names.
 
-## Phase 3 — Split feature UI and state
+## Phase 4 — Complete role-specific workflows
 
-- Move screens into feature packages by business capability.
-- Split the large ViewModel into feature-scoped ViewModels/state holders.
-- Keep shared navigation, theme and reusable components separate.
-- Preserve all existing portal routes and role-specific navigation behavior.
+- Implement create, view, edit and archive actions where permitted.
+- Enforce approval and publication transitions on the server.
+- Restrict parent and student access to linked records.
+- Restrict teachers to assigned classes and subjects.
+- Protect finance, payroll, health, counselling and safeguarding data with dedicated permissions.
+- Add audit events for sensitive operations.
+- Test negative access cases as well as successful workflows.
 
-## Phase 4 — Dependency wiring and test coverage
+## Phase 5 — Quality, release and operations
 
-- Introduce a single, explicit dependency composition point.
-- Add unit tests for use cases and permission decisions.
-- Add repository tests for tenant-scoped queries and mapping.
-- Retain and expand Firestore Rules emulator tests.
-- Add Supabase RLS tests before any production use of Supabase persistence.
-
-## Phase 5 — Backend and schema reconciliation
-
-- Decide whether Firebase or Supabase is the authoritative persistence platform for each data domain.
-- Document the synchronization direction and conflict policy if both remain active.
-- Reconcile field names, timestamps, identity IDs and tenant constraints.
-- Treat any schema change as a separate migration with rollback instructions.
+- Run Android unit, instrumentation and release builds.
+- Run web lint, type checks and production build.
+- Test migrations against a disposable Supabase project before production.
+- Verify backup, restore, storage policies and Edge Function secrets.
+- Configure production hosting and verify the deployed URL and authentication callbacks.
+- Record release evidence and known limitations before marking a feature complete.
 
 ## Acceptance criteria
 
-- The Android app builds successfully.
-- Existing automated tests pass; new tests cover extracted boundaries.
-- No existing role loses or gains capabilities unintentionally.
-- Cross-school and cross-branch access remains denied unless explicitly assigned.
-- Parent, student and teacher record scoping remains enforced by backend rules.
-- Report-card approval and publication states remain protected.
+- Android and web use Supabase as their only backend.
+- No Firebase SDK, configuration, service, rules or build plugin is part of the active application.
+- Builds and automated tests pass.
+- Cross-school and cross-branch access is denied unless explicitly assigned.
+- Parent, student and teacher record scoping is enforced by RLS.
+- Report-card approval and publication states are protected.
 - No production data, credentials or signing material is committed.
-- No migration is applied to a live Firebase or Supabase project as part of a package-only refactor.
-
-## Current review notes
-
-The repository currently has a mixed Firebase/Supabase footprint. Firebase is used by the Android client and Firestore rules; a Supabase schema and Retrofit integration also exist. Before further implementation, identify which backend is authoritative. Do not assume that the presence of a SQL schema means the app has fully migrated to Supabase.
-
-Large files identified during inspection include:
-- data/GsmsRepository.kt (~51 KB)
-- data/GsmsSeedData.kt (~38 KB)
-- ui/GsmsViewModel.kt (~31 KB)
-- ui/PortalDashboards.kt (~37 KB)
-- Several feature screens between ~15 KB and ~49 KB
-
-The first code-moving increment moved the seed-data object to data/seed and extracted Firestore client setup to data/firebase/FirestoreProvider.kt. A subsequent increment extracted all existing read-only snapshot stream methods into SchoolStreamsRepository.kt. GsmsRepository retains the same public observe* methods and delegates to the focused class, preserving current call sites and query constraints. Audit event writes now delegate to AuditLogRepository; callers still use the same private GsmsRepository helper.
-
-The Android build has not been executed in this environment. There is no GitHub Actions workflow configured in the repository, so the changes require a local Gradle build before merge.
-
-The next code-moving pull request should split GsmsRepository by domain while retaining a compatibility facade and preserving Firestore collection paths and security semantics.
-
-## Security issue identified for a separate fix
-
-The current Firestore rules default a missing user profile to `primaryRole: SUPER_ADMIN` and also treat a user map without `primaryRole` as a super administrator. This is a fail-open authorization fallback. It must be changed to deny access when the authenticated user's profile is missing or malformed, with regression tests for missing profiles and legacy profiles. This rules change is intentionally not bundled into the data-layer refactor and must be completed before production deployment.
+- All remaining limitations are documented and assigned before production release.
