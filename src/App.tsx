@@ -107,7 +107,7 @@ export default function App() {
         ? schoolRows.find(row=>row.id===assignedSchoolId) || null
         : schoolRows[0] || null;
       setSchool(currentSchool);
-      if(!nextRole && currentSchool) setActiveRole("SUPER_ADMIN");
+      // Never infer SUPER_ADMIN from school visibility; roles must come from an explicit assignment or trusted Auth metadata.
     }
     loadAccess();
     return ()=>{cancelled=true;};
