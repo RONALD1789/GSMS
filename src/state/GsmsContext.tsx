@@ -105,6 +105,43 @@ interface GsmsContextValue {
     className: string,
     parentName: string
   ) => void;
+  updateStudent: (
+    schoolId: string,
+    student: Student,
+    patch: {
+      fullName: string;
+      className: string;
+      stream: string;
+      parentName: string;
+      parentContact: string;
+    }
+  ) => void;
+  removeStudent: (schoolId: string, student: Student) => void;
+  addStaffMember: (
+    school: School,
+    branchId: string,
+    input: {
+      fullName: string;
+      roleTitle: string;
+      department: string;
+      subjectsSummary: string;
+      workloadHours: number;
+      leaveBalanceDays: number;
+    }
+  ) => void;
+  updateStaffMember: (
+    schoolId: string,
+    staff: StaffMember,
+    patch: {
+      fullName: string;
+      roleTitle: string;
+      department: string;
+      subjectsSummary: string;
+      workloadHours: number;
+      leaveBalanceDays: number;
+    }
+  ) => void;
+  removeStaffMember: (schoolId: string, staff: StaffMember) => void;
   recordAttendance: (school: School, branchId: string, student: Student, status: string) => void;
   addAcademicRecord: (
     school: School,
@@ -1158,6 +1195,300 @@ export const GsmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [requireCap]
   );
 
+  const updateStudent = useCallback(
+    (
+      schoolId: string,
+      student: Student,
+      patch: {
+        fullName: string;
+        className: string;
+        stream: string;
+        parentName: string;
+        parentContact: string;
+      }
+    ) => {
+      if (!requireCap(RoleCapability.ENROLL_STUDENT, 'amend learner records')) return;
+      const nextName = patch.fullName.trim();
+      if (!nextName) {
+        setBannerMessage('Learner name is required.');
+        return;
+      }
+      setStore((prev) => {
+        if (!prev) return prev;
+        const tenant = prev.tenants[schoolId];
+        if (!tenant) return prev;
+        const ownerId = prev.userProfile.userId;
+        const actorName = prev.userProfile.displayName;
+        const actorRole = resolveEffectiveRole(prev.userProfile);
+        const updated: Student = {
+          ...student,
+          fullName: nextName,
+          className: patch.className.trim() || student.className,
+          stream: patch.stream.trim() || student.stream,
+          parentName: patch.parentName.trim() || student.parentName,
+          parentContact: patch.parentContact.trim() || null
+        };
+        return {
+          ...prev,
+          tenants: {
+            ...prev.tenants,
+            [schoolId]: {
+              ...tenant,
+              students: tenant.students.map((s) => (s.id === student.id ? updated : s)),
+              auditLogs: appendAudit(
+                tenant,
+                schoolId,
+                ownerId,
+                actorName,
+                actorRole,
+                'STUDENT_RECORD_UPDATED',
+                'ADMISSIONS',
+                `Amended learner record ${updated.fullName} (${updated.admissionNo})`
+              )
+            }
+          }
+        };
+      });
+      setBannerMessage(`Updated ${nextName}`);
+    },
+    [requireCap]
+  );
+
+  const removeStudent = useCallback(
+    (schoolId: string, student: Student) => {
+      if (!requireCap(RoleCapability.ENROLL_STUDENT, 'remove learner records')) return;
+      let blocked = false;
+      setStore((prev) => {
+        if (!prev) return prev;
+        const tenant = prev.tenants[schoolId];
+        if (!tenant) return prev;
+        if (tenant.reportCards.some((rc) => rc.studentId === student.id)) {
+          blocked = true;
+          return prev;
+        }
+        const ownerId = prev.userProfile.userId;
+        const actorName = prev.userProfile.displayName;
+        const actorRole = resolveEffectiveRole(prev.userProfile);
+        return {
+          ...prev,
+          schools: prev.schools.map((s) =>
+            s.id === schoolId ? { ...s, studentCount: Math.max(0, s.studentCount - 1) } : s
+          ),
+          tenants: {
+            ...prev.tenants,
+            [schoolId]: {
+              ...tenant,
+              students: tenant.students.filter((s) => s.id !== student.id),
+              auditLogs: appendAudit(
+                tenant,
+                schoolId,
+                ownerId,
+                actorName,
+                actorRole,
+                'STUDENT_RECORD_REMOVED',
+                'ADMISSIONS',
+                `Removed learner ${student.fullName} (${student.admissionNo})`
+              )
+            }
+          }
+        };
+      });
+      if (blocked) {
+        setBannerMessage(
+          `${student.fullName} has report cards on file. Clear those before removing the learner.`
+        );
+        return;
+      }
+      setFocusStudentId((prev) => (prev === student.id ? null : prev));
+      setBannerMessage(`Removed ${student.fullName}`);
+    },
+    [requireCap]
+  );
+
+  const addStaffMember = useCallback(
+    (
+      school: School,
+      branchId: string,
+      input: {
+        fullName: string;
+        roleTitle: string;
+        department: string;
+        subjectsSummary: string;
+        workloadHours: number;
+        leaveBalanceDays: number;
+      }
+    ) => {
+      if (!requireCap(RoleCapability.MANAGE_STAFF, 'manage staff records')) return;
+      const name = input.fullName.trim();
+      if (!name) {
+        setBannerMessage('Staff name is required.');
+        return;
+      }
+      setStore((prev) => {
+        if (!prev) return prev;
+        const tenant = prev.tenants[school.id];
+        if (!tenant) return prev;
+        const ownerId = prev.userProfile.userId;
+        const actorName = prev.userProfile.displayName;
+        const actorRole = resolveEffectiveRole(prev.userProfile);
+        const member: StaffMember = {
+          id: uidGen('stf'),
+          schoolId: school.id,
+          branchId,
+          ownerId,
+          staffNo: `STF-${String(tenant.staff.length + 1).padStart(3, '0')}`,
+          fullName: name,
+          roleTitle: input.roleTitle.trim() || 'Faculty',
+          department: input.department.trim() || 'Academics',
+          subjectsSummary: input.subjectsSummary.trim() || null,
+          leaveBalanceDays: Math.max(0, Math.round(input.leaveBalanceDays)),
+          leaveUsedDays: 0,
+          onLeave: false,
+          workloadHours: Math.max(0, Math.round(input.workloadHours))
+        };
+        return {
+          ...prev,
+          schools: prev.schools.map((s) =>
+            s.id === school.id ? { ...s, staffCount: s.staffCount + 1 } : s
+          ),
+          tenants: {
+            ...prev.tenants,
+            [school.id]: {
+              ...tenant,
+              staff: [member, ...tenant.staff],
+              auditLogs: appendAudit(
+                tenant,
+                school.id,
+                ownerId,
+                actorName,
+                actorRole,
+                'STAFF_ADDED',
+                'HR_STAFF',
+                `Added ${member.fullName} as ${member.roleTitle}`
+              )
+            }
+          }
+        };
+      });
+      setBannerMessage(`Added ${name}`);
+    },
+    [requireCap]
+  );
+
+  const updateStaffMember = useCallback(
+    (
+      schoolId: string,
+      staff: StaffMember,
+      patch: {
+        fullName: string;
+        roleTitle: string;
+        department: string;
+        subjectsSummary: string;
+        workloadHours: number;
+        leaveBalanceDays: number;
+      }
+    ) => {
+      if (!requireCap(RoleCapability.MANAGE_STAFF, 'manage staff records')) return;
+      const nextName = patch.fullName.trim();
+      if (!nextName) {
+        setBannerMessage('Staff name is required.');
+        return;
+      }
+      setStore((prev) => {
+        if (!prev) return prev;
+        const tenant = prev.tenants[schoolId];
+        if (!tenant) return prev;
+        const ownerId = prev.userProfile.userId;
+        const actorName = prev.userProfile.displayName;
+        const actorRole = resolveEffectiveRole(prev.userProfile);
+        const updated: StaffMember = {
+          ...staff,
+          fullName: nextName,
+          roleTitle: patch.roleTitle.trim() || staff.roleTitle,
+          department: patch.department.trim() || staff.department,
+          subjectsSummary: patch.subjectsSummary.trim() || null,
+          workloadHours: Math.max(0, Math.round(patch.workloadHours)),
+          leaveBalanceDays: Math.max(0, Math.round(patch.leaveBalanceDays))
+        };
+        return {
+          ...prev,
+          tenants: {
+            ...prev.tenants,
+            [schoolId]: {
+              ...tenant,
+              staff: tenant.staff.map((sf) => (sf.id === staff.id ? updated : sf)),
+              auditLogs: appendAudit(
+                tenant,
+                schoolId,
+                ownerId,
+                actorName,
+                actorRole,
+                'STAFF_UPDATED',
+                'HR_STAFF',
+                `Updated ${updated.fullName} (${updated.roleTitle})`
+              )
+            }
+          }
+        };
+      });
+      setBannerMessage(`Updated ${nextName}`);
+    },
+    [requireCap]
+  );
+
+  const removeStaffMember = useCallback(
+    (schoolId: string, staff: StaffMember) => {
+      if (!requireCap(RoleCapability.MANAGE_STAFF, 'manage staff records')) return;
+      let blocked = false;
+      setStore((prev) => {
+        if (!prev) return prev;
+        const tenant = prev.tenants[schoolId];
+        if (!tenant) return prev;
+        const openLeave = tenant.leaveRequests.some(
+          (lv) => lv.staffId === staff.id && lv.status === LeaveStatus.PENDING
+        );
+        if (openLeave) {
+          blocked = true;
+          return prev;
+        }
+        const ownerId = prev.userProfile.userId;
+        const actorName = prev.userProfile.displayName;
+        const actorRole = resolveEffectiveRole(prev.userProfile);
+        return {
+          ...prev,
+          schools: prev.schools.map((s) =>
+            s.id === schoolId ? { ...s, staffCount: Math.max(0, s.staffCount - 1) } : s
+          ),
+          tenants: {
+            ...prev.tenants,
+            [schoolId]: {
+              ...tenant,
+              staff: tenant.staff.filter((sf) => sf.id !== staff.id),
+              auditLogs: appendAudit(
+                tenant,
+                schoolId,
+                ownerId,
+                actorName,
+                actorRole,
+                'STAFF_REMOVED',
+                'HR_STAFF',
+                `Removed ${staff.fullName} (${staff.staffNo})`
+              )
+            }
+          }
+        };
+      });
+      if (blocked) {
+        setBannerMessage(
+          `${staff.fullName} has a leave request awaiting review. Resolve it before removing the record.`
+        );
+        return;
+      }
+      setBannerMessage(`Removed ${staff.fullName}`);
+    },
+    [requireCap]
+  );
+
   const recordAttendance = useCallback(
     (school: School, branchId: string, student: Student, status: string) => {
       if (!requireCap(RoleCapability.MARK_ATTENDANCE, 'mark attendance')) return;
@@ -2096,6 +2427,11 @@ export const GsmsProvider: React.FC<{ children: React.ReactNode }> = ({ children
         delegateUserPermissions,
         createAccessAssignment,
         addStudent,
+        updateStudent,
+        removeStudent,
+        addStaffMember,
+        updateStaffMember,
+        removeStaffMember,
         recordAttendance,
         addAcademicRecord,
         createReportTemplate,
