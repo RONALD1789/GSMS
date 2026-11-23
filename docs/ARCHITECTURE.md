@@ -1,84 +1,83 @@
 # GSMS Architecture
 
-## Current implementation
+## Product architecture
 
-GSMS is an Android application built with Kotlin and Jetpack Compose.
+GSMS is a multi-school school-management platform with:
+- Android application: Kotlin and Jetpack Compose.
+- Browser application: React, TypeScript and Vite.
+- One backend: Supabase (Auth, PostgreSQL, Row Level Security, Storage, Realtime and Edge Functions).
 
-- Entry point: app/src/main/java/com/example/MainActivity.kt
-- UI and navigation: com.example.ui
-- Data access: com.example.data
-- Domain models and role definitions: com.example.model
-- Firebase: Authentication, Firestore, App Check and Firestore Security Rules
-- Supabase: SQL schema and a Retrofit-based synchronization path
-- Tests: Firestore rules tests at repository root and Android unit/instrumentation test source sets
+Android and web clients share the same Supabase identity, tenant and authorization model. No second application backend is supported.
 
-The current implementation is functional but several files combine multiple responsibilities. In particular, the Firestore repository, ViewModel, seed data and large Compose screens are too broad to evolve independently.
-
-## Target architecture
-
-Keep the existing Android application and backend integrations. Refactor internally into clear layers without changing user-facing behavior or database contracts during the initial phases.
+## Repository layout
 
 ```text
-app/src/main/java/com/example/
-  app/                 # Application startup and dependency wiring
-  core/
-    auth/              # Authentication state and identity
-    security/          # Permission evaluation and access policy adapters
-    common/            # Shared result types, dispatchers and utilities
-    design/            # Shared Compose components and theme
-  domain/
-    model/             # Domain entities and value types
-    access/            # Role, capability and permission contracts
-    repository/        # Repository interfaces
-    usecase/           # Business actions and validation
-  data/
-    firebase/
-      auth/            # Firebase authentication adapter
-      firestore/       # Firestore implementation and query mapping
-    supabase/          # Supabase API and synchronization adapter
-    repository/        # Repository implementations and mappers
-    seed/              # Demo and development seed data
-    export/            # PDF and document export
-    ai/                # AI provider integration
-  feature/
-    auth/              # Login and account recovery
-    dashboard/         # Portal landing pages
-    academics/         # Academics, attendance and reports
-    people/            # Students, staff and leave
-    finance/           # Fees, payments and finance
-    operations/        # Library, transport, procurement and operations
-    communications/    # Messaging and announcements
-    analytics/         # Reports, metrics and alerts
-    governance/        # Permissions, audit and AI governance
-  navigation/          # Navigation graph and portal routing
+app/                         # Android application
+  src/main/java/com/example/
+    data/supabase/           # Supabase API, session and repository integration
+    model/                   # Domain and UI-facing models
+    ui/                      # Compose screens, ViewModels and portal UI
+src/                         # Browser application (React + TypeScript + Vite)
+supabase/
+  schema.sql                 # Baseline database schema
+  migrations/                # Ordered, additive database migrations
+  functions/                 # Trusted Edge Functions
+docs/                        # Product, security and implementation specifications
 ```
 
-This is a target package map, not a request to create empty packages. Move code only when its dependencies and tests can be updated in the same change.
+## Backend responsibilities
 
-## Architectural boundaries
+- **Supabase Auth:** identity, sign-in, recovery and OAuth.
+- **PostgreSQL:** authoritative tenant, student, staff, academic, finance and operational records.
+- **RLS:** server-enforced tenant, branch, role, assigned-class and linked-student authorization.
+- **Storage:** private school documents, report exports and profile files with scoped access policies.
+- **Realtime:** permitted live updates such as notifications, attendance status and workflow changes.
+- **Edge Functions:** trusted operations requiring secrets, external provider calls, privileged validation or AI proxying.
 
-1. Compose screens render state and emit user actions. They must not query Firebase or Supabase directly.
-2. ViewModels coordinate feature use cases and expose immutable UI state.
-3. Domain models and use cases must not depend on Android, Compose, Firebase or Supabase SDK types.
-4. Repository interfaces belong to the domain layer; Firebase and Supabase implementations belong to the data layer.
-5. Authentication identifies the user. Authorization is evaluated independently for each action and resource.
-6. Tenant scope must be explicit: school, branch, academic year and term where applicable.
-7. Firestore Security Rules and Supabase Row Level Security remain authoritative server-side enforcement. Hiding a button or tab is not authorization.
-8. AI features may propose or summarize actions, but must not bypass permissions or approval workflows.
-9. Demo seed data must be isolated from production initialization and must never silently create production users or records.
-10. PDF export must consume approved, authorized domain data and must not independently widen access.
+Never expose the Supabase service-role key, database password or provider secrets in Android, browser bundles, public repositories or client environment variables. Client applications use the Supabase publishable key and rely on RLS for data authorization.
 
-## Data and security invariants
+## Application boundaries
 
-- Never expose service-role credentials or private signing secrets in the client.
-- Do not weaken existing Firestore rules or Supabase RLS to make a refactor pass.
-- Every tenant-owned record must be scoped to its school and, where relevant, branch.
-- Parent access is limited to linked students; student access is limited to their own records.
-- Teacher access is limited to assigned classes and subjects.
-- Report-card submission, review, approval and publication remain separate authorized transitions.
-- Audit records remain immutable to ordinary application users.
-- Keep Firebase and Supabase schema changes out of pure package-structure refactors.
+1. UI components render state and emit user actions; they do not bypass repositories or authorization.
+2. ViewModels/hooks coordinate feature operations and expose explicit loading, success, empty and error states.
+3. Shared domain concepts and validation remain consistent between Android and web clients.
+4. Data-access modules own Supabase queries, mapping and error handling.
+5. Authentication identifies the user; authorization is checked independently for each action and record.
+6. Tenant context is explicit: school, branch, academic year and term where relevant.
+7. UI role checks improve usability only. RLS and trusted server-side checks are authoritative.
+8. AI may suggest or summarize; it must never bypass permissions, approvals or human review.
+9. Development seed data is isolated from production and must not create fake production records.
+10. Exports use the same authorized data scope as the screen or workflow that requests them.
 
-## Compatibility strategy
+## Multi-tenant security invariants
 
-The refactor is incremental. Preserve public model shapes, Firestore collection names, document field names, Supabase table names and security semantics until a separately reviewed migration is approved. Prefer adapters and interfaces before changing persistence contracts.
+- Every tenant-owned record is scoped to a school; branch scope applies where relevant.
+- A school user cannot access another school's records.
+- Teachers and class teachers are restricted to assigned classes and subjects.
+- Parents are restricted to formally linked students.
+- Students are restricted to their own records.
+- Report-card draft, submit, return, approve and publish transitions are separately authorized.
+- Finance, payroll, medical, counselling and safeguarding records require dedicated permissions.
+- Audit history for sensitive actions is append-only for ordinary application users.
+- Role assignment and tenant reassignment must prevent privilege escalation.
+- Access rules are tested using normal authenticated user sessions, not only SQL Editor or privileged access.
+
+## Database change policy
+
+- Inspect the existing schema and migration history before adding tables or columns.
+- Prefer additive, reversible migrations; preserve existing school data.
+- Do not duplicate existing tables or silently change established identifiers.
+- Use stable UUID foreign keys for Auth users and stable student/staff relationships; do not authorize by display name.
+- Test each migration in a disposable Supabase project before production.
+- Maintain a documented positive and negative RLS test matrix for every portal role.
+
+## Delivery and deployment
+
+- Web: run lint, type checks and production build; deploy the SPA with the configured hosting provider and Supabase environment variables.
+- Android: run unit tests, instrumentation tests and release build with the configured Supabase URL and publishable key.
+- Never mark a portal complete because its navigation or dashboard renders. Each feature must be implemented, tested and verified against RLS.
+- Production deployment requires passing builds, tested migrations, configured OAuth/provider secrets and verified tenant isolation.
+
+## Current implementation status
+
+This document describes the approved architecture, not a claim that all portal work is complete. Track implementation against `docs/PORTAL_FEATURE_SPECIFICATION.md` and active GitHub issues/pull requests. Database migrations must be integrated and verified with real authenticated test identities before production release.
