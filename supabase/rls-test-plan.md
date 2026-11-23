@@ -74,6 +74,7 @@ Also create a second branch A2, a second class P6, and a second student S2.
 17. Parent attendance returns only rows whose student_id is one of the parent's linked student IDs; unlinked legacy attendance and another parent's attendance remain invisible.
 18. Teacher, Class Teacher and other staff roles can submit leave only for the authenticated user's matching staff record; they cannot submit on behalf of another staff member.
 19. Parent can read only invoices linked to their assigned student IDs; an invoice linked to another student or an unlinked invoice must remain invisible.
+26. Parent and Student can read the student profile row for each linked student ID, but cannot read an unrelated student's profile even in the same branch.
 20. Finance Officer can create an invoice only with a valid student_id in the same school and branch; invalid or cross-tenant student links must fail.
 21. Procurement Officer can create/update procurement records but cannot mutate Stores records; Storekeeper can mutate Stores but only read Procurement.
 22. Finance Officer can read Procurement records for oversight but cannot create/update requisitions or purchase orders unless separately delegated MANAGE_PROCUREMENT.
