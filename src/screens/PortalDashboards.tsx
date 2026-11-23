@@ -2,6 +2,7 @@ import React from 'react';
 import {
   AlertTriangle,
   Award,
+  ArrowUpRight,
   BookOpen,
   Building2,
   Bus,
@@ -77,16 +78,22 @@ export const PortalDashboards: React.FC<Props> = ({ onNavigateTab }) => {
     showBanner(`Exported ${filename}`);
   };
 
-  // Metrics shared across dashboards
-  const totalStudents = workspace.students.length;
+  // Dashboard metrics use the same role-scoped learner set as the workspace.
+  const scopedStudents = RolePolicy.filterStudentsForRole(
+    activeRole,
+    workspace.students,
+    workspace.assignedClasses,
+    workspace.linkedStudentIds
+  );
+  const totalStudents = scopedStudents.length;
   const totalStaff = workspace.staff.length;
   const avgAttendance =
     totalStudents > 0
-      ? Math.round(workspace.students.reduce((s, st) => s + st.attendanceRate, 0) / totalStudents)
+      ? Math.round(scopedStudents.reduce((s, st) => s + st.attendanceRate, 0) / totalStudents)
       : 0;
   const avgScore =
     totalStudents > 0
-      ? Math.round(workspace.students.reduce((s, st) => s + st.averageScore, 0) / totalStudents)
+      ? Math.round(scopedStudents.reduce((s, st) => s + st.averageScore, 0) / totalStudents)
       : 0;
 
   const openAlerts = workspace.alerts.filter((a) => a.status !== 'RESOLVED');
@@ -101,12 +108,6 @@ export const PortalDashboards: React.FC<Props> = ({ onNavigateTab }) => {
   const totalSaaSMrr = workspace.schools.reduce((s, sc) => s + sc.monthlyRevenueUsd, 0);
   const totalGlobalStudents = workspace.schools.reduce((s, sc) => s + sc.studentCount, 0);
 
-  const scopedStudents = RolePolicy.filterStudentsForRole(
-    activeRole,
-    workspace.students,
-    workspace.assignedClasses,
-    workspace.linkedStudentIds
-  );
   const requiresLearner = RolePolicy.requiresLearnerScope(activeRole, activeExtraCapabilities);
   const focusStudent = RolePolicy.resolveFocusStudent(scopedStudents, focusStudentId);
 
@@ -811,7 +812,39 @@ export const PortalDashboards: React.FC<Props> = ({ onNavigateTab }) => {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#102B45] via-[#153B5A] to-[#1D4ED8] px-5 py-6 sm:px-7 sm:py-7 text-white shadow-lg shadow-[#0F2537]/10">
+        <div className="pointer-events-none absolute -right-12 -top-16 h-56 w-56 rounded-full border-[28px] border-white/5" />
+        <div className="pointer-events-none absolute right-24 -bottom-24 h-48 w-48 rounded-full bg-white/5 blur-2xl" />
+        <div className="relative flex flex-col xl:flex-row xl:items-end xl:justify-between gap-5">
+          <div className="min-w-0 max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-blue-100">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+              {roleMeta.shortTitle} workspace
+            </div>
+            <h1 className="mt-3 text-2xl sm:text-3xl font-extrabold tracking-tight">
+              Welcome back{userProfile?.displayName ? ", " + userProfile.displayName.split(" ")[0] : ""}
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-blue-100/90">{roleMeta.scopeDescription}</p>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs">
+              {activeSchool ? <span className="rounded-lg bg-white/10 border border-white/10 px-3 py-1.5">{activeSchool.name}</span> : null}
+              <span className="rounded-lg bg-white/10 border border-white/10 px-3 py-1.5">{activeSchool?.activeAcademicYear || "Academic year not set"} · {activeSchool?.activeTerm || "Term not set"}</span>
+              {workspace.assignedClasses.length > 0 ? <span className="rounded-lg bg-white/10 border border-white/10 px-3 py-1.5">{workspace.assignedClasses.join(", ")}</span> : null}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {RolePolicy.visibleTabs(activeRole, activeSchool, activeExtraCapabilities)
+              .filter((tab) => tab !== GsmsTab.DASHBOARD)
+              .slice(0, 3)
+              .map((tab) => (
+                <button key={tab} type="button" onClick={() => onNavigateTab(tab)} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-white/20">
+                  {tab === GsmsTab.ACADEMICS ? "Academics" : tab === GsmsTab.PEOPLE ? "People & HR" : tab === GsmsTab.OPERATIONS ? "Operations" : tab === GsmsTab.ANALYTICS ? "Analytics" : "AI Assistant"}
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </button>
+              ))}
+          </div>
+        </div>
+      </section>
       <AiCopilotBannerCard
         role={activeRole}
         lowDataMode={lowDataMode}

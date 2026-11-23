@@ -533,18 +533,16 @@ export const RolePolicy = {
     linkedStudentIds: string[] = []
   ): Student[] {
     if (role === PortalRole.PARENT || role === PortalRole.STUDENT) {
-      if (linkedStudentIds.length > 0) {
-        const linked = students.filter((s) => linkedStudentIds.includes(s.id));
-        if (linked.length > 0) return linked;
-      }
-      return students;
+      // Fail closed: an account without an explicit linked-student assignment
+      // must never inherit access to the whole school register.
+      if (linkedStudentIds.length === 0) return [];
+      return students.filter((s) => linkedStudentIds.includes(s.id));
     }
     if (role === PortalRole.TEACHER || role === PortalRole.CLASS_TEACHER) {
-      if (assignedClasses.length > 0) {
-        const lowerClasses = assignedClasses.map((c) => c.toLowerCase());
-        return students.filter((s) => lowerClasses.includes(s.className.toLowerCase()));
-      }
-      return students;
+      // Fail closed until the administrator assigns at least one class.
+      if (assignedClasses.length === 0) return [];
+      const lowerClasses = assignedClasses.map((c) => c.toLowerCase());
+      return students.filter((s) => lowerClasses.includes(s.className.toLowerCase()));
     }
     return students;
   },
@@ -556,10 +554,11 @@ export const RolePolicy = {
     assignedSubjects: string[] = []
   ): AcademicRecord[] {
     if (role === PortalRole.TEACHER || role === PortalRole.CLASS_TEACHER) {
+      if (assignedClasses.length === 0) return [];
       return academics.filter((rec) => {
-        const classMatch =
-          assignedClasses.length === 0 ||
-          assignedClasses.some((c) => c.toLowerCase() === rec.className.toLowerCase());
+        const classMatch = assignedClasses.some(
+          (c) => c.toLowerCase() === rec.className.toLowerCase()
+        );
         const subjectMatch =
           assignedSubjects.length === 0 ||
           !rec.subjectName ||
@@ -580,8 +579,9 @@ export const RolePolicy = {
       const targetIds = focusStudent
         ? new Set([focusStudent.id])
         : new Set(linkedStudents.map((s) => s.id));
+      if (targetIds.size === 0) return [];
       return reports.filter(
-        (r) => r.status === ReportStatus.PUBLISHED && (targetIds.size === 0 || targetIds.has(r.studentId))
+        (r) => r.status === ReportStatus.PUBLISHED && targetIds.has(r.studentId)
       );
     }
     return reports;
