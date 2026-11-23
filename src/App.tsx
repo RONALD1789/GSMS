@@ -94,6 +94,8 @@ export default function App() {
       const rawRole=list[0]?.primary_role ? String(list[0].primary_role).toUpperCase() : metadataRole;
       const nextRole=rawRole==="ACCOUNTANT"?"FINANCE_OFFICER":rawRole;
       setActiveRole(roles.includes(nextRole)?nextRole:(nextRole || ""));
+      if (!nextRole) setDataMessage("Your account has no active GSMS role assignment. Ask your school administrator to assign a role before using school modules.");
+      else setDataMessage("");
       const schoolResult=await supabase.from("gsms_school_summaries").select("*");
       if(cancelled)return;
       if(schoolResult.error){
