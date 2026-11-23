@@ -59,3 +59,26 @@ h1, h2, h3, .font-display {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+
+/* GSMS portal visual system: shared refinements across all role workspaces. */
+:root {
+  color-scheme: light;
+  --gsms-surface: #ffffff;
+  --gsms-muted: #64748b;
+  --gsms-line: #e2e8f0;
+  --gsms-brand: #153b5a;
+}
+
+html { scroll-behavior: smooth; }
+body { min-width: 320px; }
+button, input, select, textarea { font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, .35);
+  outline-offset: 2px;
+}
+::selection { background: rgba(37, 99, 235, .18); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
