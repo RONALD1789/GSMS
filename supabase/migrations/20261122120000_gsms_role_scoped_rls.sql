@@ -465,7 +465,7 @@ language sql
 stable
 security definer
 set search_path = public, pg_temp
-as $$
+as $
   select exists (
     select 1
     from public.gsms_user_access_assignments a
@@ -475,7 +475,30 @@ as $$
       and upper(a.primary_role) in ('PARENT', 'STUDENT')
       and target_student_id = any(a.linked_student_ids)
   );
-$$;
+$;
+
+-- Linked parents and learners must also be able to open their own student profile.
+-- Keep this helper after gsms_parent_can_access_student so PostgreSQL can resolve it.
+create or replace function public.gsms_can_access_student(
+  target_school_id text,
+  target_student_id text,
+  target_class_name text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select
+    public.gsms_is_school_manager(target_school_id)
+    or public.gsms_has_any_role(
+      target_school_id,
+      array['HEADTEACHER', 'DEPUTY_HEADTEACHER', 'SCHOOL_COUNSELLOR', 'WELFARE_NURSE']
+    )
+    or public.gsms_can_access_class(target_school_id, target_class_name)
+    or public.gsms_parent_can_access_student(target_school_id, target_student_id);
+$;
 
 
 
