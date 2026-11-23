@@ -5,29 +5,25 @@
 GSMS is a multi-school school-management platform with:
 - Android application: Kotlin and Jetpack Compose.
 - Browser application: React, TypeScript and Vite.
-- Backend target: Supabase only (Auth, PostgreSQL, Row Level Security, Storage, Realtime and Edge Functions).
+- One backend: Supabase (Auth, PostgreSQL, Row Level Security, Storage, Realtime and Edge Functions).
 
-The Android and web clients must use the same Supabase tenant, identity and authorization model. Firebase is not part of the target architecture. Any remaining Firebase code or configuration in the default branch must be treated as migration work, not as an approved backend dependency.
+Android and web clients share the same Supabase identity, tenant and authorization model. No second application backend is supported.
 
 ## Repository layout
 
 ```text
 app/                         # Android application
   src/main/java/com/example/
-    data/                    # Data access and Supabase integration
+    data/supabase/           # Supabase API, session and repository integration
     model/                   # Domain and UI-facing models
     ui/                      # Compose screens, ViewModels and portal UI
-web/ or src/                 # Browser application (React + TypeScript + Vite)
+src/                         # Browser application (React + TypeScript + Vite)
 supabase/
-  schema.sql                 # Existing baseline schema (review before changes)
-  migrations/                # Additive, ordered database migrations
+  schema.sql                 # Baseline database schema
+  migrations/                # Ordered, additive database migrations
   functions/                 # Trusted Edge Functions
-docs/
-  PORTAL_FEATURE_SPECIFICATION.md
-  ARCHITECTURE.md
+docs/                        # Product, security and implementation specifications
 ```
-
-This is a logical map. Keep the actual existing project paths unless a deliberate, tested refactor is approved.
 
 ## Backend responsibilities
 
@@ -36,22 +32,22 @@ This is a logical map. Keep the actual existing project paths unless a deliberat
 - **RLS:** server-enforced tenant, branch, role, assigned-class and linked-student authorization.
 - **Storage:** private school documents, report exports and profile files with scoped access policies.
 - **Realtime:** permitted live updates such as notifications, attendance status and workflow changes.
-- **Edge Functions:** trusted operations that require secrets, external provider calls, privileged validation or AI proxying.
+- **Edge Functions:** trusted operations requiring secrets, external provider calls, privileged validation or AI proxying.
 
-Never expose the Supabase service-role key, database password or provider secrets in Android, browser bundles, public repositories or client environment variables. Client applications use the Supabase publishable key and must rely on RLS for data authorization.
+Never expose the Supabase service-role key, database password or provider secrets in Android, browser bundles, public repositories or client environment variables. Client applications use the Supabase publishable key and rely on RLS for data authorization.
 
 ## Application boundaries
 
 1. UI components render state and emit user actions; they do not bypass repositories or authorization.
 2. ViewModels/hooks coordinate feature operations and expose explicit loading, success, empty and error states.
-3. Shared domain concepts and validation must remain consistent between Android and web clients.
+3. Shared domain concepts and validation remain consistent between Android and web clients.
 4. Data-access modules own Supabase queries, mapping and error handling.
 5. Authentication identifies the user; authorization is checked independently for each action and record.
 6. Tenant context is explicit: school, branch, academic year and term where relevant.
 7. UI role checks improve usability only. RLS and trusted server-side checks are authoritative.
 8. AI may suggest or summarize; it must never bypass permissions, approvals or human review.
-9. Development seed data must be isolated from production and must not create fake production records.
-10. Exports must use the same authorized data scope as the screen or workflow that requests them.
+9. Development seed data is isolated from production and must not create fake production records.
+10. Exports use the same authorized data scope as the screen or workflow that requests them.
 
 ## Multi-tenant security invariants
 
@@ -64,7 +60,7 @@ Never expose the Supabase service-role key, database password or provider secret
 - Finance, payroll, medical, counselling and safeguarding records require dedicated permissions.
 - Audit history for sensitive actions is append-only for ordinary application users.
 - Role assignment and tenant reassignment must prevent privilege escalation.
-- All access rules must be tested using normal authenticated user sessions, not only SQL Editor or service-role access.
+- Access rules are tested using normal authenticated user sessions, not only SQL Editor or privileged access.
 
 ## Database change policy
 
@@ -73,7 +69,7 @@ Never expose the Supabase service-role key, database password or provider secret
 - Do not duplicate existing tables or silently change established identifiers.
 - Use stable UUID foreign keys for Auth users and stable student/staff relationships; do not authorize by display name.
 - Test each migration in a disposable Supabase project before production.
-- Keep a documented positive and negative RLS test matrix for every portal role.
+- Maintain a documented positive and negative RLS test matrix for every portal role.
 
 ## Delivery and deployment
 
@@ -84,4 +80,4 @@ Never expose the Supabase service-role key, database password or provider secret
 
 ## Current implementation status
 
-This document describes the approved target architecture, not a claim that all migration and portal work is already complete. Track implementation against `docs/PORTAL_FEATURE_SPECIFICATION.md` and the active GitHub issues/pull requests. The Firebase-to-Supabase migration and role-scoped RLS migration must not be considered complete until the migration is integrated into the current default branch and verified with real authenticated test identities.
+This document describes the approved architecture, not a claim that all portal work is complete. Track implementation against `docs/PORTAL_FEATURE_SPECIFICATION.md` and active GitHub issues/pull requests. Database migrations must be integrated and verified with real authenticated test identities before production release.
