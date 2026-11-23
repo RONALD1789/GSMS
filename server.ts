@@ -36,21 +36,22 @@ function isPlaceholderSecret(value: string): boolean {
 function getSupabaseServerConfig(): {
   isConfigured: boolean;
   baseUrl: string | null;
-  anonKey: string | null;
+  publishableKey: string | null;
   maskedHost: string;
   issue: string | null;
 } {
   const rawUrl = process.env.SUPABASE_URL?.trim() || '';
-  const rawKey = process.env.SUPABASE_ANON_KEY?.trim() || '';
+  // Prefer the current publishable key; retain anon-key compatibility for older deployments.
+  const rawKey = process.env.SUPABASE_PUBLISHABLE_KEY?.trim() || process.env.SUPABASE_ANON_KEY?.trim() || '';
 
   if (!rawUrl || !rawKey || isPlaceholderSecret(rawUrl) || isPlaceholderSecret(rawKey)) {
     return {
       isConfigured: false,
       baseUrl: null,
-      anonKey: null,
+      publishableKey: null,
       maskedHost: 'Local Workspace Mode',
       issue:
-        'Supabase cloud credentials are not configured yet. Sign in works with local workspace persistence; add real SUPABASE_URL and SUPABASE_ANON_KEY secrets to enable cloud sync.'
+        'Supabase cloud credentials are not configured yet. Add SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY secrets to enable cloud sync.'
     };
   }
 
@@ -75,7 +76,7 @@ function getSupabaseServerConfig(): {
   return {
     isConfigured: true,
     baseUrl: normalizedUrl,
-    anonKey: rawKey,
+    publishableKey: rawKey,
     maskedHost: parsed.host,
     issue: null
   };
@@ -160,7 +161,7 @@ async function startServer() {
     }
   });
 
-  // Supabase Config Status (keeps URL and anon key strictly server-side)
+  // Supabase Config Status (keeps the project URL and publishable key server-side)
   app.get('/api/supabase/status', (_req, res) => {
     const cfg = getSupabaseServerConfig();
     res.json({
@@ -173,7 +174,7 @@ async function startServer() {
   // Server-side Supabase GoTrue & PostgREST Proxy
   app.all('/api/supabase/proxy/*', async (req, res) => {
     const cfg = getSupabaseServerConfig();
-    if (!cfg.isConfigured || !cfg.baseUrl || !cfg.anonKey) {
+    if (!cfg.isConfigured || !cfg.baseUrl || !cfg.publishableKey) {
       res.status(503).json({ message: cfg.issue || 'Supabase is not configured.' });
       return;
     }
@@ -189,15 +190,16 @@ async function startServer() {
     const targetUrl = `${cfg.baseUrl}/${rawSuffix}${queryString}`;
 
     const headers: Record<string, string> = {
-      apikey: cfg.anonKey,
+      apikey: cfg.publishableKey,
       Accept: 'application/json'
     };
 
     const incomingAuth = req.header('authorization');
     if (incomingAuth && incomingAuth.startsWith('Bearer ')) {
       headers.Authorization = incomingAuth;
-    } else if (cfg.anonKey.startsWith('eyJ')) {
-      headers.Authorization = `Bearer ${cfg.anonKey}`;
+    } else if (cfg.publishableKey.startsWith('eyJ')) {
+      // Legacy JWT anon keys also need a bearer header; sb_publishable keys do not.
+      headers.Authorization = `Bearer ${cfg.publishableKey}`;
     }
 
     const prefer = req.header('prefer');
